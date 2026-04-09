@@ -8,6 +8,9 @@ import { AuthContext } from "../context/AuthContext";
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 
+// Main Screen
+import HomeScreen from "../screens/HomeScreen";
+
 // Client Screens
 import ClientHomeScreen from "../screens/ClientHomeScreen";
 
@@ -39,6 +42,11 @@ function ClientStack() {
   return (
     <Stack.Navigator>
       <Stack.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
         name="ClientHome"
         component={ClientHomeScreen}
         options={{ headerShown: false }}
@@ -61,6 +69,11 @@ function ClientStack() {
 function DomiciliarioStack() {
   return (
     <Stack.Navigator>
+      <Stack.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{ headerShown: false }}
+      />
       <Stack.Screen
         name="DomiciliarioHome"
         component={DomiciliarioHomeScreen}
