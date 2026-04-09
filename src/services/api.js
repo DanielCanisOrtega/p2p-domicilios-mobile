@@ -1,12 +1,23 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from 'react-native';
 
 const TOKEN_KEY = "@p2p_token";
 
+// Detectar plataforma y usar la URL apropiada
+
+const getBaseURL = () => {
+  if (Platform.OS === 'web') {
+    return "http://localhost:8080";
+  }
+  if (Platform.OS === 'android') {
+    return "http://10.0.2.2:8080"; // Android emulator
+  }
+  return "http://localhost:8080"; // iOS simulator
+};
+
 export const api = axios.create({
-  baseURL: "http://10.0.2.2:8080", // Android emulator localhost
-  // baseURL: "http://localhost:8080", // iOS simulator
-  // baseURL: "http://192.168.x.x:8080", // Dispositivo físico (reemplazar con IP local)
+  baseURL: getBaseURL(),
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
