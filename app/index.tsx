@@ -1,223 +1,153 @@
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView, Platform,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet, Text,
-  TextInput, TouchableOpacity,
-  View
-} from 'react-native';
+import { useContext, useEffect } from 'react';
+import { AuthContext } from '../src/context/AuthContext';
 
-const DARK_THEME = {
+const THEME = {
   background: '#121212',
-  card: '#1E1E1E',
+  primary: '#00D69A',
   textPrimary: '#FFFFFF',
   textSecondary: '#ADB5BD',
-  primary: '#00D69A', 
-  destination: '#FFC107', 
-  border: '#333333',
 };
 
-export default function DomigoApp() {
+export default function WelcomeScreen() {
   const router = useRouter();
+  const { isAuthenticated, user, isLoading } = useContext(AuthContext);
 
-  // ESTADOS
-  const [origen, setOrigen] = useState("Cra 7 #12-34, Centro");
-  const [destino, setDestino] = useState("Cll 18 #8-20, Las Palmas");
-  const [descripcion, setDescripcion] = useState("");
-  const [tarifaReal, setTarifaReal] = useState("8.500"); // Se actualizará tras el primer pedido
-  const [tiempo, setTiempo] = useState(12);
-  const [loading, setLoading] = useState(false);
-
-  // VALIDACIÓN
-  const esFormularioValido = 
-    origen.trim().length > 5 && 
-    destino.trim().length > 5 && 
-    !loading;
-
-  const handleConfirmarPedido = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('http://localhost:8080/api/orders/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Basic ' + btoa('admin:password123')
-        },
-        body: JSON.stringify({
-          id_cliente: 1, // 🌟 Coincide con tu Backend
-          id_domiciliario: 2,
-          direccion_origen: origen,
-          direccion_destino: destino,
-          descripcion: descripcion || "Sin descripción",
-          lat_origen: 7.8939,
-          lon_origen: -72.4842,
-          lat_destino: 7.8890,
-          lon_destino: -72.5023,
-          tiempo_estimado: tiempo
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Actualizamos la tarifa con lo que calculó el Backend (Haversine)
-        if (data.tarifa) setTarifaReal(data.tarifa.toLocaleString());
-
-        // 🚀 Navegamos al seguimiento pasando el ID real de Neon
-        router.push({
-          pathname: "/seguimiento",
-          params: { idServicio: data.id_servicio || data.idServicio }
-        });
-
-      } else {
-        const errorMsg = await response.text();
-        Alert.alert("❌ Error", "El servidor rechazó el pedido. Verifica los IDs en Neon.");
-        console.log("Error detalles:", errorMsg);
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user) {
+      // Redirigir según el rol
+      if (user.role === 'CLIENT') {
+        router.replace('/(cliente)/mapa');
+      } else if (user.role === 'DOMICILIARIO') {
+        router.replace('/(domiciliario)/mapa');
       }
-    } catch (error) {
-      Alert.alert("❌ Error de Red", "No se pudo conectar al Backend. ¿Está encendido el puerto 8080?");
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [isAuthenticated, user, isLoading]);
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.loadingText}>Cargando...</Text>
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        style={{ flex: 1 }}
-      >
-        {/* HEADER */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Detalles del servicio</Text>
+    <View style={styles.container}>
+      {/* Logo con efecto glow */}
+      <View style={styles.logoContainer}>
+        <View style={styles.logoGlow}>
+          <View style={styles.logoBox}>
+            <Text style={styles.logoIcon}>🛵</Text>
+          </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          
-          {/* TARJETA CONDUCTOR */}
-          <View style={styles.driverCard}>
-            <Ionicons name="person-circle" size={50} color={DARK_THEME.primary} />
-            <View style={styles.driverInfo}>
-              <Text style={styles.driverName}>Carlos Mendoza</Text>
-              <Text style={styles.driverRating}>⭐ 4.9 · 320 m de ti</Text>
-            </View>
-            <TouchableOpacity onPress={() => Alert.alert("Próximamente", "Podrás elegir otros domis.")}>
-                <Text style={styles.changeText}>Cambiar</Text>
-            </TouchableOpacity>
-          </View>
+        <Text style={styles.logoText}>
+          Domi<Text style={styles.logoTextHighlight}>Go</Text>
+        </Text>
 
-          {/* RUTA */}
-          <View style={styles.routeCard}>
-            <View style={styles.row}>
-              <Ionicons name="radio-button-on" size={20} color={DARK_THEME.primary} />
-              <View style={styles.inputWrapper}>
-                <Text style={styles.inputLabel}>ORIGEN</Text>
-                <TextInput 
-                  style={styles.textInput}
-                  value={origen}
-                  onChangeText={setOrigen}
-                  placeholderTextColor={DARK_THEME.textSecondary}
-                />
-              </View>
-            </View>
+        <Text style={styles.tagline}>
+          Tu domiciliario más cercano,{'\n'}en segundos.
+        </Text>
+      </View>
 
-            <View style={styles.line} />
+      {/* Botones */}
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => router.push('/(auth)/register')}
+        >
+          <Text style={styles.primaryButtonText}>Crear cuenta</Text>
+        </TouchableOpacity>
 
-            <View style={styles.row}>
-              <Ionicons name="location" size={20} color={DARK_THEME.destination} />
-              <View style={styles.inputWrapper}>
-                <Text style={styles.inputLabel}>DESTINO</Text>
-                <TextInput 
-                  style={styles.textInput}
-                  value={destino}
-                  onChangeText={setDestino}
-                  placeholderTextColor={DARK_THEME.textSecondary}
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* DESCRIPCIÓN */}
-          <TextInput 
-            style={styles.textArea}
-            placeholder="¿Qué debemos llevar? Ejemplo: Unas papas de la UFPS..."
-            placeholderTextColor={DARK_THEME.textSecondary}
-            multiline
-            value={descripcion}
-            onChangeText={setDescripcion}
-          />
-
-          {/* RESUMEN */}
-          <View style={styles.summaryRow}>
-            <View>
-              <Text style={styles.summaryLabel}>Tarifa estimada</Text>
-              <Text style={styles.summaryValue}>${tarifaReal}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.summaryLabel}>Tiempo estimado</Text>
-              <Text style={styles.summaryValue}>~{tiempo} min</Text>
-            </View>
-          </View>
-
-        </ScrollView>
-
-        {/* FOOTER */}
-        <View style={styles.footer}>
-          <TouchableOpacity 
-            style={[
-              styles.confirmButton, 
-              (!esFormularioValido) && { backgroundColor: '#333' }
-            ]}
-            onPress={handleConfirmarPedido}
-            disabled={!esFormularioValido}
-          >
-            {loading ? (
-              <ActivityIndicator color="#000" />
-            ) : (
-              <Text style={[
-                styles.confirmButtonText,
-                (!esFormularioValido) && { color: '#666' }
-              ]}>
-                Confirmar solicitud
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => router.push('/(auth)/login')}
+        >
+          <Text style={styles.secondaryButtonText}>Ya tengo cuenta</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: DARK_THEME.background },
-  container: { padding: 20 },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFF', marginLeft: 15 },
-  backButton: { padding: 5 },
-  driverCard: { flexDirection: 'row', backgroundColor: DARK_THEME.card, padding: 15, borderRadius: 15, alignItems: 'center', marginBottom: 20 },
-  driverInfo: { flex: 1, marginLeft: 12 },
-  driverName: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  driverRating: { color: DARK_THEME.textSecondary, fontSize: 12 },
-  changeText: { color: DARK_THEME.primary, fontWeight: 'bold' },
-  routeCard: { backgroundColor: DARK_THEME.card, padding: 20, borderRadius: 15, marginBottom: 20 },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  inputWrapper: { marginLeft: 15, flex: 1 },
-  inputLabel: { color: DARK_THEME.textSecondary, fontSize: 10, fontWeight: 'bold' },
-  textInput: { color: '#FFF', fontSize: 15, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#333' },
-  line: { width: 2, height: 20, backgroundColor: '#333', marginLeft: 9, marginVertical: 5 },
-  textArea: { backgroundColor: DARK_THEME.card, color: '#FFF', padding: 15, borderRadius: 12, height: 100, textAlignVertical: 'top', marginBottom: 25 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  summaryLabel: { color: DARK_THEME.textSecondary, fontSize: 12 },
-  summaryValue: { color: DARK_THEME.primary, fontSize: 28, fontWeight: 'bold' },
-  footer: { padding: 20, borderTopWidth: 1, borderTopColor: '#222', backgroundColor: DARK_THEME.background },
-  confirmButton: { backgroundColor: DARK_THEME.primary, padding: 18, borderRadius: 15, alignItems: 'center' },
-  confirmButtonText: { color: '#000', fontSize: 18, fontWeight: 'bold' }
+  container: {
+    flex: 1,
+    backgroundColor: THEME.background,
+    justifyContent: 'space-between',
+    padding: 20,
+  },
+  logoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoGlow: {
+    shadowColor: THEME.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 40,
+    elevation: 20,
+  },
+  logoBox: {
+    width: 120,
+    height: 120,
+    backgroundColor: THEME.primary,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  logoIcon: {
+    fontSize: 60,
+  },
+  logoText: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: THEME.textPrimary,
+    marginBottom: 10,
+  },
+  logoTextHighlight: {
+    color: THEME.primary,
+  },
+  tagline: {
+    fontSize: 16,
+    color: THEME.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  loadingText: {
+    color: THEME.textPrimary,
+    fontSize: 16,
+  },
+  buttonContainer: {
+    gap: 15,
+    paddingBottom: 40,
+  },
+  primaryButton: {
+    backgroundColor: THEME.primary,
+    paddingVertical: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.textPrimary,
+  },
+  secondaryButtonText: {
+    color: THEME.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
