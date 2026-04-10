@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
 import { useContext } from 'react';
 import { useRouter } from 'expo-router';
 import { AuthContext } from '../../src/context/AuthContext';
@@ -17,18 +17,35 @@ export default function DomiciliarioPerfilScreen() {
   const { user, logout } = useContext(AuthContext);
   const router = useRouter();
 
-  const handleLogout = () => {
-    Alert.alert('Cerrar Sesión', '¿Estás seguro?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Cerrar Sesión',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/');
+  const handleLogout = async () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('¿Estás seguro que deseas cerrar sesión?');
+      if (!confirmed) return;
+    } else {
+      return Alert.alert('Cerrar Sesión', '¿Estás seguro?', [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar Sesión',
+          style: 'destructive',
+          onPress: () => performLogout(),
         },
-      },
-    ]);
+      ]);
+    }
+
+    await performLogout();
+  };
+
+  const performLogout = async () => {
+    try {
+      await logout();
+      router.replace('/');
+    } catch (error) {
+      if (Platform.OS === 'web') {
+        window.alert('Error: No se pudo cerrar sesión');
+      } else {
+        Alert.alert('Error', 'No se pudo cerrar sesión');
+      }
+    }
   };
 
   return (
