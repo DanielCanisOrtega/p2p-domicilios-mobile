@@ -1,14 +1,43 @@
-import { createContext, useState, useEffect } from "react";
+import { createContext, useState, useEffect, ReactNode } from "react";
 import { authService } from "../services/authService";
 
-export const AuthContext = createContext();
+interface User {
+  username: string;
+  email: string;
+  role: 'CLIENT' | 'DOMICILIARIO';
+  userId?: number;
+  id?: number;
+  nombre?: string;
+  token?: string;
+}
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+interface AuthContextType {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (username: string, password: string) => Promise<any>;
+  register: (userData: any) => Promise<any>;
+  logout: () => Promise<void>;
+}
+
+export const AuthContext = createContext<AuthContextType>({
+  user: null,
+  isAuthenticated: false,
+  isLoading: true,
+  login: async () => {},
+  register: async () => {},
+  logout: async () => {},
+});
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Verificar si hay sesión guardada al iniciar la app
   useEffect(() => {
     checkAuthStatus();
   }, []);
@@ -34,7 +63,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const login = async (username, password) => {
+  const login = async (username: string, password: string) => {
     try {
       const response = await authService.login(username, password);
       setUser(response);
@@ -45,7 +74,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const register = async (userData) => {
+  const register = async (userData: any) => {
     try {
       const response = await authService.register(userData);
       setUser(response);

@@ -5,7 +5,7 @@ import Constants from 'expo-constants';
 
 const TOKEN_KEY = "@p2p_token";
 
-const getBaseURL = () => {
+const getBaseURL = (): string => {
   if (Platform.OS === 'web') {
     return "http://localhost:8080";
   }
@@ -31,7 +31,7 @@ api.interceptors.request.use(
   async (config) => {
     try {
       const token = await AsyncStorage.getItem(TOKEN_KEY);
-      if (token) {
+      if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {

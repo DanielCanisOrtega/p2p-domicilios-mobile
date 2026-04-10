@@ -4,11 +4,28 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const TOKEN_KEY = "@p2p_token";
 const USER_KEY = "@p2p_user";
 
+interface RegisterData {
+  username: string;
+  password: string;
+  email: string;
+  role: 'CLIENT' | 'DOMICILIARIO';
+  nombre: string;
+}
+
+interface AuthResponse {
+  token: string;
+  username: string;
+  email: string;
+  role: 'CLIENT' | 'DOMICILIARIO';
+  userId?: number;
+  [key: string]: any;
+}
+
 export const authService = {
   // Registrar nuevo usuario
-  async register(userData) {
+  async register(userData: RegisterData): Promise<AuthResponse> {
     try {
-      const response = await api.post("/auth/register", userData);
+      const response = await api.post<AuthResponse>("/auth/register", userData);
       const { token, ...user } = response.data;
 
       // Guardar token y usuario
@@ -16,15 +33,15 @@ export const authService = {
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
 
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       throw error.response?.data || { error: "Error en el registro" };
     }
   },
 
   // Login
-  async login(username, password) {
+  async login(username: string, password: string): Promise<AuthResponse> {
     try {
-      const response = await api.post("/auth/login", { username, password });
+      const response = await api.post<AuthResponse>("/auth/login", { username, password });
       const { token, ...user } = response.data;
 
       // Guardar token y usuario
@@ -32,13 +49,13 @@ export const authService = {
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
 
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       throw error.response?.data || { error: "Error en el login" };
     }
   },
 
   // Logout
-  async logout() {
+  async logout(): Promise<void> {
     try {
       await AsyncStorage.removeItem(TOKEN_KEY);
       await AsyncStorage.removeItem(USER_KEY);
@@ -48,7 +65,7 @@ export const authService = {
   },
 
   // Obtener token guardado
-  async getToken() {
+  async getToken(): Promise<string | null> {
     try {
       return await AsyncStorage.getItem(TOKEN_KEY);
     } catch (error) {
@@ -58,7 +75,7 @@ export const authService = {
   },
 
   // Obtener usuario guardado
-  async getUser() {
+  async getUser(): Promise<any | null> {
     try {
       const userJson = await AsyncStorage.getItem(USER_KEY);
       return userJson ? JSON.parse(userJson) : null;
@@ -69,7 +86,7 @@ export const authService = {
   },
 
   // Verificar si está autenticado
-  async isAuthenticated() {
+  async isAuthenticated(): Promise<boolean> {
     const token = await this.getToken();
     return !!token;
   },
