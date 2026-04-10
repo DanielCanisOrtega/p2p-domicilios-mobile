@@ -14,11 +14,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const checkAuthStatus = async () => {
-    console.log('[AuthContext] Verificando estado de autenticación...');
-
-    // Timeout de seguridad - después de 3 segundos, forzar que termine la carga
     const timeoutId = setTimeout(() => {
-      console.warn('[AuthContext] Timeout - forzando fin de carga');
       setIsLoading(false);
     }, 3000);
 
@@ -26,22 +22,15 @@ export function AuthProvider({ children }) {
       const savedUser = await authService.getUser();
       const token = await authService.getToken();
 
-      console.log('[AuthContext] Usuario guardado:', savedUser);
-      console.log('[AuthContext] Token existe:', !!token);
-
       if (savedUser && token) {
         setUser(savedUser);
         setIsAuthenticated(true);
-        console.log('[AuthContext] Usuario autenticado:', savedUser.username);
-      } else {
-        console.log('[AuthContext] No hay sesión guardada');
       }
     } catch (error) {
-      console.error("[AuthContext] Error al verificar autenticación:", error);
+      console.error("Error al verificar autenticación:", error);
     } finally {
       clearTimeout(timeoutId);
       setIsLoading(false);
-      console.log('[AuthContext] Carga completada');
     }
   };
 
@@ -73,7 +62,7 @@ export function AuthProvider({ children }) {
       setUser(null);
       setIsAuthenticated(false);
     } catch (error) {
-      console.error("Error al cerrar sesión:", error);
+      throw error;
     }
   };
 
