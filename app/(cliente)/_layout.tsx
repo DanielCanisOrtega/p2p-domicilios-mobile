@@ -1,5 +1,5 @@
-import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
 
 const THEME = {
   primary: '#00D69A',
@@ -61,6 +61,18 @@ export default function ClienteLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="confirmar-pedido"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="seguimiento"
+        options={{
+          href: null,
         }}
       />
     </Tabs>
