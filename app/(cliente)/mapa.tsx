@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TextInput,
   ScrollView,
-  Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { MapView, Marker } from '../../src/components/map';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,37 +56,41 @@ export default function ClienteMapScreen() {
   const [location, setLocation] = useState<any>(null);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
+
+  const requestLocation = async () => {
+    setIsLoadingLocation(true);
+    setLocationError(null);
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+
+      if (status !== 'granted') {
+        setLocationError('Permiso de ubicación denegado. La app necesita tu ubicación para mostrar domiciliarios cercanos.');
+        setIsLoadingLocation(false);
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      setLocation(loc);
+      setLocationError(null);
+
+      // Cargar domiciliarios cercanos con ubicación REAL
+      fetchNearbyDrivers(loc.coords.latitude, loc.coords.longitude);
+    } catch (error) {
+      console.error('Error obteniendo ubicación:', error);
+      setLocationError('Error al obtener tu ubicación. Verifica que el GPS esté activado.');
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  };
 
   useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permiso denegado', 'Necesitamos acceso a tu ubicación');
-          // Usar ubicación por defecto para demo (Cúcuta, Colombia)
-          const defaultLoc = {
-            coords: { latitude: 7.8939, longitude: -72.5078 }
-          };
-          setLocation(defaultLoc);
-          fetchNearbyDrivers(7.8939, -72.5078);
-          return;
-        }
-
-        const loc = await Location.getCurrentPositionAsync({});
-        setLocation(loc);
-
-        // Cargar domiciliarios cercanos
-        fetchNearbyDrivers(loc.coords.latitude, loc.coords.longitude);
-      } catch (error) {
-        console.error('Error obteniendo ubicación:', error);
-        // Usar ubicación por defecto
-        const defaultLoc = {
-          coords: { latitude: 7.8939, longitude: -72.5078 }
-        };
-        setLocation(defaultLoc);
-        fetchNearbyDrivers(7.8939, -72.5078);
-      }
-    })();
+    requestLocation();
   }, []);
 
   const fetchNearbyDrivers = async (lat: number, lon: number) => {
@@ -100,22 +104,43 @@ export default function ClienteMapScreen() {
     }
   };
 
+  // Pantalla de error si no hay ubicación
+  if (locationError) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="location-outline" size={80} color={THEME.textSecondary} />
+        <Text style={styles.errorTitle}>Ubicación no disponible</Text>
+        <Text style={styles.errorMessage}>{locationError}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={requestLocation}>
+          <Ionicons name="refresh" size={20} color="#000" />
+          <Text style={styles.retryButtonText}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Pantalla de carga mientras obtiene ubicación
+  if (isLoadingLocation || !location) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Ionicons name="location" size={60} color={THEME.primary} />
+        <Text style={styles.loadingText}>Obteniendo tu ubicación...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Mapa */}
       <MapView
         style={styles.map}
         customMapStyle={CUSTOM_MAP_STYLE}
-        region={
-          location
-            ? {
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-                latitudeDelta: 0.02,
-                longitudeDelta: 0.02,
-              }
-            : undefined
-        }
+        region={{
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        }}
       >
         {/* Marcador del usuario */}
         {location && (
@@ -189,6 +214,53 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: THEME.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: THEME.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 15,
+  },
+  loadingText: {
+    color: THEME.textPrimary,
+    fontSize: 16,
+    marginTop: 10,
+  },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: THEME.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    gap: 15,
+  },
+  errorTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: THEME.textPrimary,
+    marginTop: 20,
+  },
+  errorMessage: {
+    fontSize: 15,
+    color: THEME.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: THEME.primary,
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 12,
+    marginTop: 20,
+    gap: 10,
+  },
+  retryButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   map: {
     flex: 1,
