@@ -12,7 +12,7 @@ import { MapView, Marker } from '../../src/components/MapView';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { AuthContext } from '../../src/context/AuthContext';
-import axios from 'axios';
+import { api } from '../../src/services/api';
 
 const THEME = {
   background: '#121212',
@@ -95,8 +95,8 @@ export default function ClienteMapScreen() {
 
   const fetchNearbyDrivers = async (lat: number, lon: number) => {
     try {
-      const response = await axios.get(
-        `http://localhost:8080/drivers/nearby?lat=${lat}&lon=${lon}&radiusKm=5`
+      const response = await api.get(
+        `/drivers/nearby?lat=${lat}&lon=${lon}&radiusKm=5`
       );
       setDrivers(response.data);
     } catch (error) {
