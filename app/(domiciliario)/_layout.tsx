@@ -1,12 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-
-const THEME = {
-  primary: '#00D69A',
-  inactive: '#666',
-  background: '#121212',
-  tabBar: '#1E1E1E',
-};
+import { THEME } from '../../src/constants/theme';
 
 export default function DomiciliarioLayout() {
   return (

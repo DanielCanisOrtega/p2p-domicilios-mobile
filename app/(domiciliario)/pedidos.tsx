@@ -1,10 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
-
-const THEME = {
-  background: '#121212',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#ADB5BD',
-};
+import { THEME } from '../../src/constants/theme';
 
 export default function DomiciliarioPedidosScreen() {
   return (

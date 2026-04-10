@@ -2,17 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-const THEME = {
-  background: '#080d18',
-  panel: '#14161d',
-  panelSoft: '#101521',
-  primary: '#18d8b0',
-  accent: '#3d82d8',
-  warning: '#f3bf1e',
-  textSecondary: '#8a909b',
-  divider: '#252a34',
-};
+import { THEME } from '../../src/constants/theme';
 
 export default function SeguimientoScreen() {
   const router = useRouter();

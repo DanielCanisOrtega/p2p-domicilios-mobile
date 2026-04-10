@@ -2,15 +2,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react
 import { useContext } from 'react';
 import { useRouter } from 'expo-router';
 import { AuthContext } from '../../src/context/AuthContext';
-
-const THEME = {
-  background: '#121212',
-  card: '#1E1E1E',
-  primary: '#00D69A',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#ADB5BD',
-  danger: '#FF3B30',
-};
+import { THEME } from '../../src/constants/theme';
 
 export default function ClientePerfilScreen() {
   const { user, logout } = useContext(AuthContext);

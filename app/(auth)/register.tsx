@@ -14,15 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../src/context/AuthContext';
-
-const THEME = {
-  background: '#121212',
-  card: '#1E1E1E',
-  primary: '#00D69A',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#ADB5BD',
-  border: '#333333',
-};
+import { THEME } from '../../src/constants/theme';
 
 export default function RegisterScreen() {
   const router = useRouter();

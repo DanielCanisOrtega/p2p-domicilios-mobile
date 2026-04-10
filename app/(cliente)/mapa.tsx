@@ -13,15 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { AuthContext } from '../../src/context/AuthContext';
 import { api } from '../../src/services/api';
-
-const THEME = {
-  background: '#121212',
-  card: '#1E1E1E',
-  primary: '#00D69A',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#ADB5BD',
-  border: '#333333',
-};
+import { THEME } from '../../src/constants/theme';
 
 const CUSTOM_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },

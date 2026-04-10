@@ -1,12 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-
-const THEME = {
-  primary: '#00D69A',
-  inactive: '#666',
-  background: '#121212',
-  tabBar: '#1E1E1E',
-};
+import { THEME } from '../../src/constants/theme';
 
 export default function ClienteLayout() {
   return (

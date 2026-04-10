@@ -2,13 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useContext, useEffect } from 'react';
 import { AuthContext } from '../src/context/AuthContext';
-
-const THEME = {
-  background: '#121212',
-  primary: '#00D69A',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#ADB5BD',
-};
+import { THEME } from '../src/constants/theme';
 
 export default function WelcomeScreen() {
   const router = useRouter();
