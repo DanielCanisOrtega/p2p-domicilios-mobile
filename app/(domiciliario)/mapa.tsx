@@ -7,7 +7,7 @@ import {
   Switch,
   Alert,
 } from 'react-native';
-import { MapView, Marker } from '../../src/components/MapView';
+import { MapView, Marker } from '../../src/components/map';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { AuthContext } from '../../src/context/AuthContext';

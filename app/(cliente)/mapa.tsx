@@ -3,17 +3,18 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   TextInput,
   ScrollView,
   Alert,
 } from 'react-native';
-import { MapView, Marker } from '../../src/components/MapView';
+import { MapView, Marker } from '../../src/components/map';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { AuthContext } from '../../src/context/AuthContext';
 import { api } from '../../src/services/api';
 import { THEME } from '../../src/constants/theme';
+import DriverCard from '../../src/components/driver/DriverCard';
+import Avatar from '../../src/components/ui/Avatar';
 
 const CUSTOM_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
@@ -96,11 +97,6 @@ export default function ClienteMapScreen() {
     }
   };
 
-  const getInitials = (name?: string) => {
-    if (!name) return 'U';
-    return name.charAt(0).toUpperCase();
-  };
-
   return (
     <View style={styles.container}>
       {/* Mapa */}
@@ -162,9 +158,7 @@ export default function ClienteMapScreen() {
             onChangeText={setSearchQuery}
           />
         </View>
-        <View style={styles.avatarButton}>
-          <Text style={styles.avatarText}>{getInitials(user?.nombre || user?.username)}</Text>
-        </View>
+        <Avatar name={user?.nombre || user?.username} size={48} />
       </View>
 
       {/* Panel de domiciliarios */}
@@ -173,30 +167,7 @@ export default function ClienteMapScreen() {
 
         <ScrollView style={styles.driversList} showsVerticalScrollIndicator={false}>
           {drivers.map((driver) => (
-            <TouchableOpacity key={driver.id} style={styles.driverCard}>
-              <View style={styles.driverAvatar}>
-                <Text style={styles.driverAvatarText}>
-                  {driver.nombre ? driver.nombre.charAt(0) : '🛵'}
-                </Text>
-              </View>
-
-              <View style={styles.driverInfo}>
-                <Text style={styles.driverName}>
-                  {driver.nombre || `Domiciliario ${driver.id}`}
-                </Text>
-                <View style={styles.driverMeta}>
-                  <Text style={styles.driverRating}>⭐ {driver.calificacion || '4.9'}</Text>
-                  <Text style={styles.driverVehicle}> · {driver.vehiculo || 'Moto'}</Text>
-                </View>
-              </View>
-
-              <View style={styles.driverStatus}>
-                <Text style={styles.statusBadge}>DISPONIBLE</Text>
-                <Text style={styles.driverDistance}>
-                  {driver.distancia ? `${driver.distancia.toFixed(0)} m` : '320 m'}
-                </Text>
-              </View>
-            </TouchableOpacity>
+            <DriverCard key={driver.id} driver={driver} />
           ))}
 
           {drivers.length === 0 && (
@@ -240,19 +211,6 @@ const styles = StyleSheet.create({
     flex: 1,
     color: THEME.textPrimary,
     fontSize: 16,
-  },
-  avatarButton: {
-    width: 48,
-    height: 48,
-    backgroundColor: THEME.primary,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    color: '#000',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
   userMarker: {
     width: 24,
@@ -299,60 +257,6 @@ const styles = StyleSheet.create({
   },
   driversList: {
     flex: 1,
-  },
-  driverCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: THEME.card,
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 12,
-    gap: 12,
-  },
-  driverAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#FFB020',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  driverAvatarText: {
-    fontSize: 24,
-  },
-  driverInfo: {
-    flex: 1,
-  },
-  driverName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: THEME.textPrimary,
-    marginBottom: 4,
-  },
-  driverMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  driverRating: {
-    fontSize: 12,
-    color: THEME.textSecondary,
-  },
-  driverVehicle: {
-    fontSize: 12,
-    color: THEME.textSecondary,
-  },
-  driverStatus: {
-    alignItems: 'flex-end',
-  },
-  statusBadge: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: THEME.primary,
-    marginBottom: 4,
-  },
-  driverDistance: {
-    fontSize: 14,
-    color: THEME.textSecondary,
   },
   emptyState: {
     padding: 40,
