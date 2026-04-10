@@ -39,12 +39,15 @@ const CUSTOM_MAP_STYLE = [
 
 interface Driver {
   id: number;
-  nombre?: string;
+  nombre: string;
+  email?: string;
   latitud: number;
   longitud: number;
   disponible: boolean;
-  calificacion?: number;
-  vehiculo?: string;
+  verificado?: boolean;
+  calificacion: number;
+  vehiculo: string;
+  placa?: string;
   distancia?: number;
 }
 
@@ -117,6 +120,7 @@ export default function ClienteMapScreen() {
         {/* Marcador del usuario */}
         {location && (
           <Marker
+            key="user-location"
             coordinate={{
               latitude: location.coords.latitude,
               longitude: location.coords.longitude,
@@ -132,7 +136,7 @@ export default function ClienteMapScreen() {
         {/* Marcadores de domiciliarios */}
         {drivers.map((driver) => (
           <Marker
-            key={driver.id}
+            key={`driver-${driver.id}`}
             coordinate={{
               latitude: driver.latitud,
               longitude: driver.longitud,
