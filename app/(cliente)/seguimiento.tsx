@@ -1,57 +1,80 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { MapView, Marker } from '../../src/components/map';
 import { THEME } from '../../src/constants/theme';
+
+const CUSTOM_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+  {
+    featureType: 'road',
+    elementType: 'geometry',
+    stylers: [{ color: '#38414e' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#212a37' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'geometry',
+    stylers: [{ color: '#17263c' }],
+  },
+];
 
 export default function SeguimientoScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    driverName?: string;
+    driverVehicle?: string;
+    driverPlate?: string;
+    driverLat?: string;
+    driverLon?: string;
+    userLat?: string;
+    userLon?: string;
+  }>();
+
+  const userLat = Number(params.userLat ?? 7.8939);
+  const userLon = Number(params.userLon ?? -72.4842);
+  const driverLat = Number(params.driverLat ?? userLat + 0.0015);
+  const driverLon = Number(params.driverLon ?? userLon + 0.0015);
+  const driverName = params.driverName || 'Domiciliario asignado';
+  const vehicle = params.driverVehicle || 'Moto';
+  const plate = params.driverPlate || 'Sin placa';
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.mapArea}>
-        <View style={styles.gridOverlay} />
-        <View style={styles.vignetteTop} />
-        <View style={styles.vignetteBottom} />
+        <MapView
+          style={styles.map}
+          customMapStyle={CUSTOM_MAP_STYLE}
+          region={{
+            latitude: userLat,
+            longitude: userLon,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+          }}
+        >
+          <Marker coordinate={{ latitude: userLat, longitude: userLon }} title="Origen">
+            <View style={styles.originMarkerPin}>
+              <View style={styles.originMarkerDot} />
+            </View>
+          </Marker>
 
-        <View style={styles.roadVerticalMain} />
-        <View style={styles.roadVerticalLeft} />
-        <View style={styles.roadVerticalRight} />
-        <View style={styles.roadHorizontalTop} />
-        <View style={styles.roadHorizontalBottom} />
-
-        <View style={[styles.cityBlock, styles.blockTopLeft]} />
-        <View style={[styles.cityBlock, styles.blockTopRight]} />
-        <View style={[styles.cityBlock, styles.blockBottomLeft]} />
-        <View style={[styles.cityBlock, styles.blockBottomRight]} />
+          <Marker coordinate={{ latitude: driverLat, longitude: driverLon }} title={driverName}>
+            <View style={styles.driverMarkerPin}>
+              <MaterialCommunityIcons name="motorbike" size={16} color="#0a0f1c" />
+            </View>
+          </Marker>
+        </MapView>
 
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
-
-        <View style={styles.mapMarkerTop}>
-          <View style={styles.markerRing}>
-            <MaterialCommunityIcons name="motorbike" size={18} color={THEME.warning} />
-          </View>
-        </View>
-
-        <View style={styles.routeGroup}>
-          <View style={styles.routeTop} />
-          <View style={styles.routeMiddle} />
-          <View style={styles.routeBottom} />
-        </View>
-
-        <View style={styles.originMarker}>
-          <View style={styles.pinHalo} />
-          <View style={[styles.pinDot, { backgroundColor: THEME.primary }]} />
-        </View>
-
-        <View style={styles.destinationMarker}>
-          <View style={styles.pinHalo} />
-          <View style={[styles.pinDot, { backgroundColor: THEME.accent }]}>
-            <Ionicons name="location-sharp" size={12} color="#ffca3a" />
-          </View>
-        </View>
       </View>
 
       <View style={styles.sheet}>
@@ -90,8 +113,8 @@ export default function SeguimientoScreen() {
           </View>
 
           <View style={styles.driverInfo}>
-            <Text style={styles.driverName}>Carlos Mendoza</Text>
-            <Text style={styles.driverMeta}>🏍 Honda CB · ABC-123</Text>
+            <Text style={styles.driverName}>{driverName}</Text>
+            <Text style={styles.driverMeta}>🏍 {vehicle} · {plate}</Text>
           </View>
 
           <View style={styles.minutesBox}>
@@ -131,119 +154,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#101a30',
     overflow: 'hidden',
   },
-  gridOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.45,
-    backgroundColor: '#101a30',
-    borderColor: 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderStyle: 'solid',
-  },
-  vignetteTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 120,
-    backgroundColor: 'rgba(8, 12, 22, 0.35)',
-    zIndex: 1,
-  },
-  vignetteBottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 160,
-    backgroundColor: 'rgba(7, 10, 18, 0.45)',
-    zIndex: 1,
-  },
-  roadVerticalMain: {
-    position: 'absolute',
-    top: -30,
-    bottom: -20,
-    left: '50%',
-    marginLeft: -5,
-    width: 10,
-    backgroundColor: 'rgba(188, 202, 230, 0.16)',
-    zIndex: 0,
-  },
-  roadVerticalLeft: {
-    position: 'absolute',
-    top: -10,
-    bottom: 20,
-    left: '22%',
-    width: 7,
-    backgroundColor: 'rgba(188, 202, 230, 0.1)',
-    zIndex: 0,
-  },
-  roadVerticalRight: {
-    position: 'absolute',
-    top: -5,
-    bottom: -10,
-    right: '18%',
-    width: 7,
-    backgroundColor: 'rgba(188, 202, 230, 0.1)',
-    zIndex: 0,
-  },
-  roadHorizontalTop: {
-    position: 'absolute',
-    top: 130,
-    left: -20,
-    right: -20,
-    height: 8,
-    backgroundColor: 'rgba(188, 202, 230, 0.14)',
-    zIndex: 0,
-  },
-  roadHorizontalBottom: {
-    position: 'absolute',
-    top: 255,
-    left: -20,
-    right: -20,
-    height: 8,
-    backgroundColor: 'rgba(188, 202, 230, 0.12)',
-    zIndex: 0,
-  },
-  cityBlock: {
-    position: 'absolute',
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.03)',
-    zIndex: 0,
-  },
-  blockTopLeft: {
-    top: 145,
-    left: 20,
-    width: 112,
-    height: 92,
-  },
-  blockTopRight: {
-    top: 145,
-    right: 20,
-    width: 112,
-    height: 92,
-  },
-  blockBottomLeft: {
-    top: 268,
-    left: 20,
-    width: 112,
-    height: 70,
-  },
-  blockBottomRight: {
-    top: 268,
-    right: 20,
-    width: 112,
-    height: 70,
-  },
-  pinHalo: {
-    position: 'absolute',
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(24, 216, 176, 0.18)',
-    top: -6,
-    left: -6,
-  },
+  map: { flex: 1 },
   backBtn: {
     position: 'absolute',
     top: 20,
@@ -256,63 +167,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mapMarkerTop: {
-    position: 'absolute',
-    top: 42,
-    left: '50%',
-    marginLeft: 18,
-    zIndex: 3,
-  },
-  markerRing: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 3,
-    borderColor: THEME.primary,
-    backgroundColor: '#0d1221',
+  originMarkerPin: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(24, 216, 176, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#18d8b0',
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 4,
   },
-  routeGroup: {
-    position: 'absolute',
-    top: 75,
-    left: '50%',
-    width: 92,
-    marginLeft: -46,
+  originMarkerDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: THEME.primary,
+  },
+  driverMarkerPin: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: THEME.warning,
     alignItems: 'center',
-    zIndex: 2,
-  },
-  routeTop: {
-    width: 3,
-    height: 32,
-    backgroundColor: THEME.primary,
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    opacity: 0.95,
-  },
-  routeMiddle: {
-    width: 56,
-    height: 86,
-    borderLeftWidth: 3,
-    borderBottomWidth: 3,
-    borderColor: THEME.primary,
-    borderStyle: 'dashed',
-    marginTop: 2,
-    marginRight: 18,
-    opacity: 0.95,
-  },
-  routeBottom: {
-    width: 3,
-    height: 66,
-    backgroundColor: THEME.primary,
-    borderRadius: 8,
-    borderStyle: 'dashed',
-    opacity: 0.95,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#0d1221',
   },
   pinDot: {
     width: 14,
@@ -320,20 +197,6 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  originMarker: {
-    position: 'absolute',
-    top: 96,
-    left: '50%',
-    marginLeft: -7,
-    zIndex: 4,
-  },
-  destinationMarker: {
-    position: 'absolute',
-    top: 270,
-    left: '50%',
-    marginLeft: -7,
-    zIndex: 4,
   },
   sheet: {
     backgroundColor: '#0a0a0b',

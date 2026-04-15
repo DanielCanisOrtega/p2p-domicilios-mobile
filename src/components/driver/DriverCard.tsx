@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { THEME } from '../../constants/theme';
 
 interface Driver {
@@ -19,6 +19,16 @@ export default function DriverCard({ driver, onPress }: DriverCardProps) {
   const getInitials = (name?: string) => {
     if (!name) return '🛵';
     return name.charAt(0).toUpperCase();
+  };
+
+  const getDistanceLabel = (distanceKm?: number) => {
+    if (!distanceKm || distanceKm <= 0) return 'Cerca de ti';
+
+    if (distanceKm < 1) {
+      return `${Math.round(distanceKm * 1000)} m`;
+    }
+
+    return `${distanceKm.toFixed(1)} km`;
   };
 
   return (
@@ -45,7 +55,7 @@ export default function DriverCard({ driver, onPress }: DriverCardProps) {
       <View style={styles.status}>
         <Text style={styles.statusBadge}>DISPONIBLE</Text>
         <Text style={styles.distance}>
-          {driver.distancia ? `${driver.distancia.toFixed(0)} m` : '320 m'}
+          {getDistanceLabel(driver.distancia)}
         </Text>
       </View>
     </TouchableOpacity>

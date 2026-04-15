@@ -29,7 +29,21 @@ export const driverService = {
         },
       });
 
-      return response.data;
+      return response.data.map((driver) => {
+        const rawDistance = Number(driver.distancia ?? 0);
+        const distanceKm = Number.isFinite(rawDistance)
+          ? rawDistance > 80
+            ? rawDistance / 1000
+            : rawDistance
+          : 0;
+
+        return {
+          ...driver,
+          latitud: Number(driver.latitud),
+          longitud: Number(driver.longitud),
+          distancia: Number(distanceKm.toFixed(2)),
+        };
+      });
     } catch (error: any) {
       throw error.response?.data || { error: "Error obteniendo domiciliarios cercanos" };
     }
