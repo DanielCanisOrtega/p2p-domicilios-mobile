@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,20 @@ import {
   TextInput,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { MapView, Marker } from '../../src/components/map';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { AuthContext } from '../../src/context/AuthContext';
-import { api } from '../../src/services/api';
+import { driverService, NearbyDriver } from '../../src/services/driverService';
 import { THEME } from '../../src/constants/theme';
 import DriverCard from '../../src/components/driver/DriverCard';
 import Avatar from '../../src/components/ui/Avatar';
+
+const POLLING_INTERVAL_MS = 10000;
+const MIN_LOCATION_CHANGE_KM = 0.03;
+const SEARCH_RADIUS_KM = 5;
 
 const CUSTOM_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
@@ -37,29 +42,63 @@ const CUSTOM_MAP_STYLE = [
   },
 ];
 
-interface Driver {
-  id: number;
-  nombre: string;
-  email?: string;
-  latitud: number;
-  longitud: number;
-  disponible: boolean;
-  verificado?: boolean;
-  calificacion: number;
-  vehiculo: string;
-  placa?: string;
-  distancia?: number;
-}
-
 export default function ClienteMapScreen() {
   const { user } = useContext(AuthContext);
-  const [location, setLocation] = useState<any>(null);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  const [drivers, setDrivers] = useState<NearbyDriver[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [driversError, setDriversError] = useState<string | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
+  const [isLoadingDrivers, setIsLoadingDrivers] = useState(false);
 
-  const requestLocation = async () => {
+  const locationRef = useRef<Location.LocationObject | null>(null);
+  const isFetchingDriversRef = useRef(false);
+  const hasFetchedDriversRef = useRef(false);
+
+  const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }, []);
+
+  const fetchNearbyDrivers = useCallback(async (lat: number, lon: number) => {
+    if (isFetchingDriversRef.current) {
+      return;
+    }
+
+    const showLoading = !hasFetchedDriversRef.current;
+
+    if (showLoading) {
+      setIsLoadingDrivers(true);
+    }
+
+    setDriversError(null);
+    isFetchingDriversRef.current = true;
+
+    try {
+      const nearbyDrivers = await driverService.getNearbyDrivers(lat, lon, SEARCH_RADIUS_KM);
+      setDrivers(nearbyDrivers);
+      hasFetchedDriversRef.current = true;
+    } catch (error) {
+      console.error('Error cargando domiciliarios:', error);
+      setDriversError('No se pudo actualizar la lista de domiciliarios.');
+    } finally {
+      if (showLoading) {
+        setIsLoadingDrivers(false);
+      }
+
+      isFetchingDriversRef.current = false;
+    }
+  }, []);
+
+  const requestLocation = useCallback(async () => {
     setIsLoadingLocation(true);
     setLocationError(null);
 
@@ -76,86 +115,82 @@ export default function ClienteMapScreen() {
         accuracy: Location.Accuracy.Balanced,
       });
 
+      locationRef.current = loc;
       setLocation(loc);
       setLocationError(null);
 
-      // Cargar domiciliarios cercanos con ubicación REAL
-      fetchNearbyDrivers(loc.coords.latitude, loc.coords.longitude);
+      await fetchNearbyDrivers(loc.coords.latitude, loc.coords.longitude);
     } catch (error) {
       console.error('Error obteniendo ubicación:', error);
       setLocationError('Error al obtener tu ubicación. Verifica que el GPS esté activado.');
     } finally {
       setIsLoadingLocation(false);
     }
-  };
+  }, [fetchNearbyDrivers]);
 
   useEffect(() => {
-    requestLocation();
-  }, []);
+    void requestLocation();
+  }, [requestLocation]);
 
-  // Actualizar domiciliarios en tiempo real
   useEffect(() => {
     if (!location) return;
 
-    // Intervalo para actualizar domiciliarios cercanos cada 15 segundos
-    const driversInterval = setInterval(() => {
-      fetchNearbyDrivers(location.coords.latitude, location.coords.longitude);
-    }, 15000);
-
-    // Intervalo para actualizar ubicación del usuario cada 30 segundos
-    const locationInterval = setInterval(async () => {
+    const pollingInterval = setInterval(() => {
+      void (async () => {
       try {
         const newLocation = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
+        const previousLocation = locationRef.current;
+        locationRef.current = newLocation;
 
-        // Solo actualizar si la ubicación cambió significativamente (más de 50 metros)
-        const distance = calculateDistance(
-          location.coords.latitude,
-          location.coords.longitude,
-          newLocation.coords.latitude,
-          newLocation.coords.longitude
-        );
-
-        if (distance > 0.05) { // 50 metros
+        if (!previousLocation) {
           setLocation(newLocation);
-          fetchNearbyDrivers(newLocation.coords.latitude, newLocation.coords.longitude);
+        } else {
+          const distance = calculateDistance(
+            previousLocation.coords.latitude,
+            previousLocation.coords.longitude,
+            newLocation.coords.latitude,
+            newLocation.coords.longitude
+          );
+
+          if (distance > MIN_LOCATION_CHANGE_KM) {
+            setLocation(newLocation);
+          }
         }
+
+        await fetchNearbyDrivers(newLocation.coords.latitude, newLocation.coords.longitude);
       } catch (error) {
-        console.error('Error actualizando ubicación:', error);
+        console.error('Error actualizando ubicación y domiciliarios:', error);
       }
-    }, 30000);
+      })();
+    }, POLLING_INTERVAL_MS);
 
-    // Cleanup: limpiar intervalos cuando el componente se desmonte
     return () => {
-      clearInterval(driversInterval);
-      clearInterval(locationInterval);
+      clearInterval(pollingInterval);
     };
-  }, [location]);
+  }, [location, fetchNearbyDrivers, calculateDistance]);
 
-  const fetchNearbyDrivers = async (lat: number, lon: number) => {
-    try {
-      const response = await api.get(
-        `/drivers/nearby?lat=${lat}&lon=${lon}&radiusKm=5`
-      );
-      setDrivers(response.data);
-    } catch (error) {
-      console.error('Error cargando domiciliarios:', error);
+  const filteredDrivers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) {
+      return drivers;
     }
-  };
 
-  // Función para calcular distancia entre dos puntos (en km)
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371; // Radio de la Tierra en km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
+    return drivers.filter((driver) => {
+      const text = `${driver.nombre ?? ''} ${driver.vehiculo ?? ''} ${driver.placa ?? ''}`.toLowerCase();
+      return text.includes(query);
+    });
+  }, [drivers, searchQuery]);
+
+  const mappableDrivers = useMemo(
+    () =>
+      filteredDrivers.filter(
+        (driver) => Number.isFinite(driver.latitud) && Number.isFinite(driver.longitud)
+      ),
+    [filteredDrivers]
+  );
 
   // Pantalla de error si no hay ubicación
   if (locationError) {
@@ -212,7 +247,7 @@ export default function ClienteMapScreen() {
         )}
 
         {/* Marcadores de domiciliarios */}
-        {drivers.map((driver) => (
+        {mappableDrivers.map((driver) => (
           <Marker
             key={`driver-${driver.id}`}
             coordinate={{
@@ -245,19 +280,28 @@ export default function ClienteMapScreen() {
 
       {/* Panel de domiciliarios */}
       <View style={styles.driversPanel}>
-        <Text style={styles.panelTitle}>Domiciliarios disponibles</Text>
+        <Text style={styles.panelTitle}>Domiciliarios disponibles ({filteredDrivers.length})</Text>
 
-        <ScrollView style={styles.driversList} showsVerticalScrollIndicator={false}>
-          {drivers.map((driver) => (
-            <DriverCard key={driver.id} driver={driver} />
-          ))}
+        {driversError && <Text style={styles.errorText}>{driversError}</Text>}
 
-          {drivers.length === 0 && (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No hay domiciliarios disponibles cerca</Text>
-            </View>
-          )}
-        </ScrollView>
+        {isLoadingDrivers && drivers.length === 0 ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator color={THEME.primary} />
+            <Text style={styles.emptyText}>Buscando domiciliarios cercanos...</Text>
+          </View>
+        ) : (
+          <ScrollView style={styles.driversList} showsVerticalScrollIndicator={false}>
+            {filteredDrivers.map((driver) => (
+              <DriverCard key={driver.id} driver={driver} />
+            ))}
+
+            {filteredDrivers.length === 0 && (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>No hay domiciliarios disponibles cerca</Text>
+              </View>
+            )}
+          </ScrollView>
+        )}
       </View>
     </View>
   );
@@ -382,7 +426,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: THEME.textPrimary,
-    marginBottom: 15,
+    marginBottom: 10,
+  },
+  errorText: {
+    color: THEME.warning,
+    marginBottom: 10,
+    fontSize: 12,
   },
   driversList: {
     flex: 1,
