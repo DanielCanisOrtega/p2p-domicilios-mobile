@@ -1,12 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 
 const TOKEN_KEY = "@p2p_token";
 
+
 const getBaseURL = (): string => {
-  if (__DEV__) {
+  /*if (__DEV__) {
     // desarrollo local
     if (Platform.OS === "web") {
       return "http://localhost:8080";
@@ -18,7 +17,8 @@ const getBaseURL = (): string => {
     }
 
     return "http://localhost:8080";
-  }
+  } 
+    ------> DESCOMENTAR PARA PROBAR LOCAL*/
 
   // producción (Render)
   return "https://p2p-domicilios-backend-1.onrender.com";
@@ -26,7 +26,7 @@ const getBaseURL = (): string => {
 
 export const api = axios.create({
   baseURL: getBaseURL(),
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
   },
