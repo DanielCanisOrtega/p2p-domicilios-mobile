@@ -1,7 +1,7 @@
-import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from 'react-native';
+import axios from "axios";
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 const TOKEN_KEY = "@p2p_token";
 
@@ -21,7 +21,7 @@ const getBaseURL = (): string => {
   }
 
   // producción (Render)
-  return "https://p2p-domicilios-backend.onrender.com";
+  return "https://p2p-domicilios-backend-1.onrender.com";
 };
 
 export const api = axios.create({
