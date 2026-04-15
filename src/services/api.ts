@@ -6,16 +6,22 @@ import Constants from 'expo-constants';
 const TOKEN_KEY = "@p2p_token";
 
 const getBaseURL = (): string => {
-  if (Platform.OS === 'web') {
+  if (__DEV__) {
+    // desarrollo local
+    if (Platform.OS === "web") {
+      return "http://localhost:8080";
+    }
+
+    const expoHost = Constants.expoConfig?.hostUri?.split(":").shift();
+    if (expoHost) {
+      return `http://${expoHost}:8080`;
+    }
+
     return "http://localhost:8080";
   }
 
-  const expoHost = Constants.expoConfig?.hostUri?.split(':').shift();
-  if (expoHost) {
-    return `http://${expoHost}:8080`;
-  }
-
-  return "http://localhost:8080";
+  // producción (Render)
+  return "https://p2p-domicilios-backend.onrender.com";
 };
 
 export const api = axios.create({
