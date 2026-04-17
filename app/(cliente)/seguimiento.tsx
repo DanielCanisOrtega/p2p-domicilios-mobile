@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MapView, Marker } from '../../src/components/map';
 import { THEME } from '../../src/constants/theme';
 
@@ -29,9 +29,15 @@ const CUSTOM_MAP_STYLE = [
 export default function SeguimientoScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
+    driverId?: string;
     driverName?: string;
+    driverPhone?: string;
+    driverEmail?: string;
     driverVehicle?: string;
     driverPlate?: string;
+    driverVerified?: string;
+    driverRating?: string;
+    driverDistanceKm?: string;
     driverLat?: string;
     driverLon?: string;
     userLat?: string;
@@ -42,9 +48,40 @@ export default function SeguimientoScreen() {
   const userLon = Number(params.userLon ?? -72.4842);
   const driverLat = Number(params.driverLat ?? userLat + 0.0015);
   const driverLon = Number(params.driverLon ?? userLon + 0.0015);
+  const driverId = params.driverId || 'N/A';
   const driverName = params.driverName || 'Domiciliario asignado';
+  const phone = params.driverPhone || 'No disponible';
+  const email = params.driverEmail || 'No disponible';
   const vehicle = params.driverVehicle || 'Moto';
   const plate = params.driverPlate || 'Sin placa';
+  const verified = params.driverVerified === 'true';
+  const rating = params.driverRating || 'N/A';
+  const distance = params.driverDistanceKm ? `${Number(params.driverDistanceKm).toFixed(1)} km` : 'N/A';
+
+  const handleCallDriver = async () => {
+    const cleanPhone = (params.driverPhone || '').replace(/[^\d+]/g, '').trim();
+
+    if (!cleanPhone) {
+      Alert.alert('Sin teléfono', 'Este domiciliario no tiene teléfono disponible.');
+      return;
+    }
+
+    const phoneUrl = `tel:${cleanPhone}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(phoneUrl);
+
+      if (!canOpen) {
+        Alert.alert('No disponible', 'No se pudo abrir la app de llamadas en este dispositivo.');
+        return;
+      }
+
+      await Linking.openURL(phoneUrl);
+    } catch (error) {
+      console.error('Error al abrir marcador:', error);
+      Alert.alert('Error', 'No fue posible iniciar la llamada en este momento.');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -115,11 +152,56 @@ export default function SeguimientoScreen() {
           <View style={styles.driverInfo}>
             <Text style={styles.driverName}>{driverName}</Text>
             <Text style={styles.driverMeta}>🏍 {vehicle} · {plate}</Text>
+            <Text style={styles.driverMeta}>📞 {phone}</Text>
           </View>
 
           <View style={styles.minutesBox}>
             <Text style={styles.minutesValue}>7</Text>
             <Text style={styles.minutesLabel}>MIN</Text>
+          </View>
+        </View>
+
+        <View style={styles.detailsCard}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>ID</Text>
+            <Text style={styles.detailValue}>#{driverId}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Verificación</Text>
+            <Text style={[styles.detailValue, { color: verified ? THEME.primary : '#f4b400' }]}>
+              {verified ? 'Verificado' : 'Pendiente'}
+            </Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Calificación</Text>
+            <Text style={styles.detailValue}>⭐ {rating}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Distancia</Text>
+            <Text style={styles.detailValue}>{distance}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Teléfono</Text>
+            <Text style={styles.detailValue}>{phone}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Correo</Text>
+            <Text style={styles.detailValue}>{email}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Vehículo</Text>
+            <Text style={styles.detailValue}>{vehicle}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Placa</Text>
+            <Text style={styles.detailValue}>{plate}</Text>
           </View>
         </View>
 
@@ -129,7 +211,7 @@ export default function SeguimientoScreen() {
             <Text style={styles.actionText}>Chat</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => void handleCallDriver()}>
             <Ionicons name="call" size={20} color="#e8e8e8" />
             <Text style={styles.actionText}>Llamar</Text>
           </TouchableOpacity>
@@ -323,6 +405,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingBottom: 8,
+    marginTop: 14,
+  },
+  detailsCard: {
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2d2d2d',
+    backgroundColor: '#151515',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: '#252525',
+  },
+  detailLabel: {
+    color: '#8f8f8f',
+    fontSize: 12,
+  },
+  detailValue: {
+    color: '#e9e9e9',
+    fontSize: 12,
+    fontWeight: '700',
+    maxWidth: '62%',
+    textAlign: 'right',
   },
   actionBtn: {
     flex: 1,

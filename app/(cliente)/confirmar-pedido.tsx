@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MapView, Marker } from '../../src/components/map';
 import { AuthContext } from '../../src/context/AuthContext';
@@ -38,21 +38,11 @@ const FARE_CONFIG = {
 
 const AVERAGE_SPEED_KMPH = 22;
 const MINUTES_BUFFER = 4;
-
-const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-};
+const BASE_TRAVEL_KM = 2.5;
 
 export default function ConfirmarPedido() {
   const router = useRouter();
+  const { preferredDriverId } = useLocalSearchParams<{ preferredDriverId?: string }>();
   const { user } = useContext(AuthContext);
   
   // Estados
@@ -77,10 +67,33 @@ export default function ConfirmarPedido() {
     [drivers]
   );
 
+  const getDriverName = (driver: NearbyDriver | null) => {
+    if (!driver) {
+      return 'Sin domiciliario asignado';
+    }
+
+    return driver.nombre?.trim() || `Domiciliario ${driver.id}`;
+  };
+
+  const getDriverContact = (driver: NearbyDriver | null) => {
+    if (!driver) {
+      return 'No disponible';
+    }
+
+    return driver.email?.trim() || 'No disponible';
+  };
+
+  const getDriverPhone = (driver: NearbyDriver | null) => {
+    if (!driver) {
+      return 'No disponible';
+    }
+
+    return driver.telefono?.trim() || 'No disponible';
+  };
+
   const getClientId = () => user?.id || user?.userId || 1;
 
-  useEffect(() => {
-    const loadNearbyDrivers = async () => {
+  const loadNearbyDrivers = useCallback(async () => {
       setLoadingDrivers(true);
 
       try {
@@ -105,64 +118,54 @@ export default function ConfirmarPedido() {
 
         setDrivers(nearbyDrivers);
 
+        const preferredId = Number(preferredDriverId);
         const firstActiveDriver = nearbyDrivers.find((driver) => driver.disponible !== false) ?? null;
-        setSelectedDriver(firstActiveDriver);
-      } catch (error) {
+
+        setSelectedDriver((prev) => {
+          const selectedId =
+            Number.isFinite(preferredId) && preferredId > 0
+              ? preferredId
+              : prev?.id;
+
+          if (!selectedId) {
+            return firstActiveDriver;
+          }
+
+          return nearbyDrivers.find((driver) => driver.id === selectedId && driver.disponible !== false) ?? firstActiveDriver;
+        });
+      } catch (error: any) {
         console.error('Error cargando domiciliarios activos:', error);
-        Alert.alert('Sin domiciliarios', 'No se pudo cargar la lista de domiciliarios activos.');
+        const details =
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          error?.message ||
+          'No se pudo cargar la lista de domiciliarios activos.';
+
+        setDrivers([]);
+        setSelectedDriver(null);
+        Alert.alert('No se pudieron cargar domiciliarios', details);
       } finally {
         setLoadingDrivers(false);
       }
-    };
-
-    void loadNearbyDrivers();
-  }, []);
+    }, [preferredDriverId]);
 
   useEffect(() => {
-    let isCancelled = false;
 
-    const recalculateEstimate = async () => {
+    void loadNearbyDrivers();
+  }, [loadNearbyDrivers]);
+
+  useEffect(() => {
+    const recalculateEstimate = () => {
       const pickupKm = Math.max(selectedDriver?.distancia ?? 0.3, 0.3);
-      let travelKm = 2.5;
-      let nextOriginCoords: Location.LocationGeocodedLocation | null = null;
-      let nextDestinationCoords: Location.LocationGeocodedLocation | null = null;
-
-      if (origen.trim() && destino.trim()) {
-        setIsEstimating(true);
-
-        try {
-          const [originGeocode, destinationGeocode] = await Promise.all([
-            Location.geocodeAsync(origen),
-            Location.geocodeAsync(destino),
-          ]);
-
-          nextOriginCoords = originGeocode[0] ?? null;
-          nextDestinationCoords = destinationGeocode[0] ?? null;
-
-          if (nextOriginCoords && nextDestinationCoords) {
-            travelKm = calculateDistanceKm(
-              nextOriginCoords.latitude,
-              nextOriginCoords.longitude,
-              nextDestinationCoords.latitude,
-              nextDestinationCoords.longitude
-            );
-          }
-        } catch (error) {
-          console.error('No se pudo geocodificar para estimar tarifa:', error);
-        } finally {
-          if (!isCancelled) {
-            setIsEstimating(false);
-          }
-        }
-      }
-
-      if (isCancelled) {
-        return;
-      }
+      const travelKm = BASE_TRAVEL_KM;
 
       const totalKm = Math.max(pickupKm + travelKm, 0.5);
-      const minutesByDistance = (totalKm / AVERAGE_SPEED_KMPH) * 60;
-      const computedMinutes = Math.max(Math.round(minutesByDistance + MINUTES_BUFFER), 8);
+      const pickupMinutes = (pickupKm / AVERAGE_SPEED_KMPH) * 60;
+      const travelEstimateMinutes = (travelKm / AVERAGE_SPEED_KMPH) * 60;
+      const computedMinutes = Math.max(
+        Math.round(pickupMinutes + travelEstimateMinutes + MINUTES_BUFFER),
+        8
+      );
       const rawFare =
         FARE_CONFIG.base +
         totalKm * FARE_CONFIG.perKm +
@@ -172,16 +175,11 @@ export default function ConfirmarPedido() {
       setEstimatedKm(totalKm);
       setEstimatedMinutes(computedMinutes);
       setEstimatedFare(computedFare);
-      setOriginCoords(nextOriginCoords);
-      setDestinationCoords(nextDestinationCoords);
+      setIsEstimating(false);
     };
 
-    void recalculateEstimate();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [origen, destino, selectedDriver]);
+    recalculateEstimate();
+  }, [selectedDriver]);
 
   const enviarPedido = async () => {
     console.log("LOG: 1. Iniciando proceso...");
@@ -217,8 +215,13 @@ export default function ConfirmarPedido() {
         params: {
           driverId: String(selectedDriver.id),
           driverName: selectedDriver.nombre || 'Domiciliario asignado',
+          driverPhone: selectedDriver.telefono || 'No disponible',
+          driverEmail: selectedDriver.email || 'No disponible',
           driverVehicle: selectedDriver.vehiculo || 'Moto',
           driverPlate: selectedDriver.placa || 'Sin placa',
+          driverVerified: selectedDriver.verificado ? 'true' : 'false',
+          driverRating: String(selectedDriver.calificacion ?? 'N/A'),
+          driverDistanceKm: String(selectedDriver.distancia ?? ''),
           driverLat: String(selectedDriver.latitud || currentLocation?.coords.latitude || 7.8939),
           driverLon: String(selectedDriver.longitud || currentLocation?.coords.longitude || -72.4842),
           userLat: String(currentLocation?.coords.latitude || 7.8939),
@@ -288,24 +291,65 @@ export default function ConfirmarPedido() {
 
           {/* CARD DOMICILIARIO */}
           <View style={styles.driverCard}>
-            <View style={styles.driverInfo}>
-              <View style={styles.avatar}><Text style={{fontSize: 20}}>🧑</Text></View>
-              <View>
-                <Text style={styles.driverName}>{selectedDriver?.nombre || 'Sin domiciliario asignado'}</Text>
-                <Text style={styles.driverStats}>
-                  {selectedDriver
-                    ? `⭐ ${selectedDriver.calificacion?.toFixed(1) || 'N/A'} · ${selectedDriver.distancia?.toFixed(1) || '?'} km de ti`
-                    : 'Elige un domiciliario activo'}
-                </Text>
+            <View style={styles.driverInfoWrap}>
+              <View style={styles.driverInfo}>
+                <View style={styles.avatar}><Text style={{ fontSize: 20 }}>🧑</Text></View>
+                <View style={styles.driverIdentity}>
+                  <Text style={styles.driverName}>{getDriverName(selectedDriver)}</Text>
+                  <Text style={styles.driverStats}>
+                    {selectedDriver
+                      ? `⭐ ${selectedDriver.calificacion?.toFixed(1) || 'N/A'} · ${selectedDriver.distancia?.toFixed(1) || '?'} km de ti`
+                      : 'Elige un domiciliario activo'}
+                  </Text>
+                </View>
               </View>
+
+              {selectedDriver ? (
+                <>
+                  <View style={styles.driverDetailRow}>
+                    <Ionicons
+                      name={selectedDriver.verificado ? 'shield-checkmark' : 'shield-outline'}
+                      size={14}
+                      color={selectedDriver.verificado ? '#17d5aa' : '#f4b400'}
+                    />
+                    <Text style={styles.driverDetailText}>
+                      {selectedDriver.verificado ? 'Perfil verificado' : 'Perfil sin validar aún'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.driverDetailRow}>
+                    <Ionicons name="bicycle" size={14} color="#8d95a4" />
+                    <Text style={styles.driverDetailText}>
+                      {selectedDriver.vehiculo || 'Moto'} · Placa {selectedDriver.placa || 'No registrada'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.driverDetailRow}>
+                    <Ionicons name="call-outline" size={14} color="#8d95a4" />
+                    <Text style={styles.driverDetailText}>Tel: {getDriverPhone(selectedDriver)}</Text>
+                  </View>
+
+                  <View style={styles.driverDetailRow}>
+                    <Ionicons name="mail-outline" size={14} color="#8d95a4" />
+                    <Text style={styles.driverDetailText}>Email: {getDriverContact(selectedDriver)}</Text>
+                  </View>
+                </>
+              ) : null}
             </View>
-            <TouchableOpacity onPress={() => setDriverListOpen((prev) => !prev)}>
-              {loadingDrivers ? (
-                <ActivityIndicator size="small" color="#17d5aa" />
-              ) : (
-                <Text style={styles.changeBtn}>Cambiar</Text>
-              )}
-            </TouchableOpacity>
+
+            <View style={styles.driverActions}>
+              {selectedDriver ? <Text style={styles.selectedBadge}>Seleccionado</Text> : null}
+              <TouchableOpacity onPress={() => setDriverListOpen((prev) => !prev)}>
+                {loadingDrivers ? (
+                  <ActivityIndicator size="small" color="#17d5aa" />
+                ) : (
+                  <Text style={styles.changeBtn}>{driverListOpen ? 'Ocultar lista' : 'Cambiar'}</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => void loadNearbyDrivers()} disabled={loadingDrivers}>
+                <Text style={styles.reloadBtn}>{loadingDrivers ? 'Recargando...' : 'Recargar'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {driverListOpen && (
@@ -327,13 +371,29 @@ export default function ConfirmarPedido() {
                         setDriverListOpen(false);
                       }}
                     >
-                      <View>
-                        <Text style={styles.driverOptionName}>{driver.nombre}</Text>
+                      <View style={styles.driverOptionMain}>
+                        <View style={styles.driverOptionHeader}>
+                          <Text style={styles.driverOptionName}>{getDriverName(driver)}</Text>
+                          <Text style={styles.driverOptionStatus}>
+                            {driver.verificado ? 'Verificado' : 'Sin validar'}
+                          </Text>
+                        </View>
+
                         <Text style={styles.driverOptionMeta}>
                           ⭐ {driver.calificacion?.toFixed(1) || 'N/A'} · {driver.distancia?.toFixed(1) || '?'} km
                         </Text>
+                        <Text style={styles.driverOptionSubMeta}>
+                          {driver.vehiculo || 'Moto'} · Placa {driver.placa || 'No registrada'}
+                        </Text>
+                        <Text style={styles.driverOptionSubMeta}>Tel: {getDriverPhone(driver)}</Text>
+                        <Text style={styles.driverOptionSubMeta}>Email: {getDriverContact(driver)}</Text>
                       </View>
-                      {isSelected && <Ionicons name="checkmark-circle" size={20} color="#17d5aa" />}
+
+                      {isSelected ? (
+                        <Ionicons name="checkmark-circle" size={20} color="#17d5aa" />
+                      ) : (
+                        <Text style={styles.selectBtn}>Seleccionar</Text>
+                      )}
                     </TouchableOpacity>
                   );
                 })
@@ -437,12 +497,19 @@ const styles = StyleSheet.create({
   },
   detailsPanel: { marginTop: -20, backgroundColor: '#0a0f1c', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
   panelTitle: { color: 'white', fontSize: 28, fontWeight: 'bold', marginBottom: 20 },
-  driverCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#171a22', padding: 15, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(23, 213, 170, 0.3)', marginBottom: 15 },
+  driverCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', backgroundColor: '#171a22', padding: 15, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(23, 213, 170, 0.3)', marginBottom: 15, gap: 10 },
+  driverInfoWrap: { flex: 1, gap: 8 },
   driverInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  driverIdentity: { flexShrink: 1 },
   avatar: { width: 45, height: 45, borderRadius: 22, backgroundColor: '#0f1e20', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#17d5aa' },
   driverName: { color: 'white', fontSize: 18, fontWeight: 'bold' },
   driverStats: { color: '#8d95a4', fontSize: 12 },
+  driverDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  driverDetailText: { color: '#c6cedd', fontSize: 12, flexShrink: 1 },
+  driverActions: { alignItems: 'flex-end', gap: 10 },
+  selectedBadge: { color: '#0a0f1c', fontSize: 10, fontWeight: '700', backgroundColor: '#17d5aa', paddingVertical: 3, paddingHorizontal: 8, borderRadius: 999 },
   changeBtn: { color: '#17d5aa', fontWeight: 'bold' },
+  reloadBtn: { color: '#8fd6ff', fontWeight: '600', fontSize: 12 },
   driverListCard: {
     backgroundColor: '#171a22',
     borderRadius: 10,
@@ -456,14 +523,20 @@ const styles = StyleSheet.create({
   driverOption: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#252b3a',
+    gap: 10,
   },
   driverOptionSelected: { backgroundColor: 'rgba(23, 213, 170, 0.08)' },
+  driverOptionMain: { flex: 1 },
+  driverOptionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   driverOptionName: { color: 'white', fontSize: 15, fontWeight: '600' },
+  driverOptionStatus: { color: '#8d95a4', fontSize: 11 },
   driverOptionMeta: { color: '#8d95a4', fontSize: 12, marginTop: 2 },
+  driverOptionSubMeta: { color: '#73809a', fontSize: 11, marginTop: 2 },
+  selectBtn: { color: '#17d5aa', fontSize: 12, fontWeight: '700', marginTop: 3 },
   addressCard: { backgroundColor: '#171a22', borderRadius: 10, padding: 15, marginBottom: 15 },
   addressRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   dot: { width: 10, height: 10, borderRadius: 5 },

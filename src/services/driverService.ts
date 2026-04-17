@@ -4,6 +4,7 @@ export interface NearbyDriver {
   id: number;
   nombre: string;
   email?: string;
+  telefono?: string;
   latitud: number;
   longitud: number;
   disponible: boolean;
@@ -29,7 +30,9 @@ export const driverService = {
         },
       });
 
-      return response.data.map((driver) => {
+      const payload = Array.isArray(response.data) ? response.data : [];
+
+      return payload.map((driver) => {
         const rawDistance = Number(driver.distancia ?? 0);
         const distanceKm = Number.isFinite(rawDistance)
           ? rawDistance > 80
@@ -45,7 +48,13 @@ export const driverService = {
         };
       });
     } catch (error: any) {
-      throw error.response?.data || { error: "Error obteniendo domiciliarios cercanos" };
+      const status = error?.response?.status;
+      const backendMessage = error?.response?.data?.message || error?.response?.data?.error;
+
+      throw {
+        status,
+        message: backendMessage || "Error obteniendo domiciliarios cercanos",
+      };
     }
   },
 };
