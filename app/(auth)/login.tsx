@@ -1,39 +1,39 @@
-import { useState, useContext } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { AuthContext } from '../../src/context/AuthContext';
+import { useRouter } from 'expo-router';
+import { useContext, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import { THEME } from '../../src/constants/theme';
+import { AuthContext } from '../../src/context/AuthContext';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { login } = useContext(AuthContext);
 
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
+    if (!identifier.trim() || !password.trim()) {
       Alert.alert('Error', 'Por favor completa todos los campos');
       return;
     }
 
     setLoading(true);
     try {
-      await login(email, password);
+      await login(identifier, password);
       // La navegación se maneja en index.tsx según el rol
     } catch (error: any) {
       Alert.alert('Error de Login', error.error || 'Credenciales inválidas');
@@ -79,14 +79,13 @@ export default function LoginScreen() {
         {/* Form */}
         <View style={styles.form}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>CORREO ELECTRÓNICO</Text>
+            <Text style={styles.label}>USUARIO O CORREO</Text>
             <TextInput
               style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="maria@correo.com"
+              value={identifier}
+              onChangeText={setIdentifier}
+              placeholder="tuusuario o correo@dominio.com"
               placeholderTextColor={THEME.textSecondary}
-              keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
             />

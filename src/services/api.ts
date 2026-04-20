@@ -1,32 +1,26 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 import axios from "axios";
 
 const TOKEN_KEY = "@p2p_token";
 
+type ExpoExtra = {
+  backendUrl?: string;
+};
+
+const getConfiguredBackendUrl = (): string | undefined => {
+  const value = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.backendUrl;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+};
 
 const getBaseURL = (): string => {
-  /*if (__DEV__) {
-    // desarrollo local
-    if (Platform.OS === "web") {
-      return "http://localhost:8080";
-    }
-
-    const expoHost = Constants.expoConfig?.hostUri?.split(":").shift();
-    if (expoHost) {
-      return `http://${expoHost}:8080`;
-    }
-
-    return "http://localhost:8080";
-  } 
-    ------> DESCOMENTAR PARA PROBAR LOCAL*/
-
-  // producción (Render)
-  return "https://p2p-domicilios-backend-1.onrender.com";
+  return getConfiguredBackendUrl() || "https://p2p-domicilios-backend-1.onrender.com";
 };
 
 export const api = axios.create({
   baseURL: getBaseURL(),
-  timeout: 30000,
+  // Render can take longer to wake up after idle periods.
+  timeout: 60000,
   headers: {
     "Content-Type": "application/json",
   },

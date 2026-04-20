@@ -1,5 +1,5 @@
-import { api } from "./api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { api } from "./api";
 
 const TOKEN_KEY = "@p2p_token";
 const USER_KEY = "@p2p_user";
@@ -39,9 +39,14 @@ export const authService = {
   },
 
   // Login
-  async login(username: string, password: string): Promise<AuthResponse> {
+  async login(identifier: string, password: string): Promise<AuthResponse> {
     try {
-      const response = await api.post<AuthResponse>("/auth/login", { username, password });
+      const normalizedIdentifier = identifier.trim();
+      const response = await api.post<AuthResponse>("/auth/login", {
+        username: normalizedIdentifier,
+        email: normalizedIdentifier,
+        password,
+      });
       const { token, ...user } = response.data;
 
       // Guardar token y usuario
@@ -50,7 +55,25 @@ export const authService = {
 
       return response.data;
     } catch (error: any) {
-      throw error.response?.data || { error: "Error en el login" };
+      const status = error?.response?.status;
+      const backendData = error?.response?.data;
+      const backendMessage =
+        backendData?.error ||
+        backendData?.message ||
+        (typeof backendData === "string" ? backendData : null);
+
+      if (!error?.response) {
+        throw {
+          error:
+            "No se pudo conectar con el servidor. Intenta de nuevo en unos segundos.",
+        };
+      }
+
+      if (status === 401) {
+        throw { error: backendMessage || "Usuario/correo o contraseña incorrectos" };
+      }
+
+      throw { error: backendMessage || "Error en el login" };
     }
   },
 

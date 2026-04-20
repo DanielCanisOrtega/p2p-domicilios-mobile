@@ -15,28 +15,24 @@
 npm install
 ```
 
-### 2. Configurar URL del Backend
+### 2. Configurar variables de entorno
 
-Edita `src/services/api.js` y ajusta la `baseURL` según tu entorno:
+Este proyecto toma la URL del backend y la API key de Google Maps desde variables de entorno.
 
-**Para Android Emulator:**
-```javascript
-baseURL: "http://10.0.2.2:8080"
+**Variables requeridas para APK Android release:**
+
+```bash
+EXPO_PUBLIC_API_URL=https://TU_BACKEND_PUBLICO
+GOOGLE_MAPS_API_KEY=TU_API_KEY_ANDROID
 ```
 
-**Para iOS Simulator:**
-```javascript
-baseURL: "http://localhost:8080"
+**Para desarrollo local puedes usar:**
+
+```bash
+EXPO_PUBLIC_API_URL=http://10.0.2.2:8080
 ```
 
-**Para Dispositivo Físico:**
-```javascript
-baseURL: "http://TU_IP_LOCAL:8080"  // Ejemplo: http://192.168.1.100:8080
-```
-
-> **Nota**: Para encontrar tu IP local:
-> - Windows: `ipconfig` en cmd
-> - Mac/Linux: `ifconfig` en terminal
+> Nota: `GOOGLE_MAPS_API_KEY` es clave sensible. Para builds en EAS no la pongas en archivos versionados; usa `eas secret`.
 
 ### 3. Asegurarse que el backend esté corriendo
 
@@ -171,6 +167,29 @@ npm run ios        # Ejecuta en iOS
 npm run web        # Ejecuta en navegador
 npm run lint       # Ejecuta ESLint
 ```
+
+## Build APK con EAS
+
+1. Iniciar sesión:
+
+```bash
+eas login
+```
+
+2. Cargar secretos para build remoto:
+
+```bash
+eas secret:create --scope project --name EXPO_PUBLIC_API_URL --value "https://TU_BACKEND_PUBLICO"
+eas secret:create --scope project --name GOOGLE_MAPS_API_KEY --value "TU_API_KEY_ANDROID"
+```
+
+3. Generar APK:
+
+```bash
+eas build -p android --profile preview
+```
+
+4. Descargar e instalar la APK desde el enlace que entrega EAS.
 
 ## Próximos Pasos
 
