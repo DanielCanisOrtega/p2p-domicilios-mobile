@@ -69,6 +69,12 @@ export default function ClienteLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="perfil-domiciliario"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

@@ -1,4 +1,4 @@
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { ReactNode } from 'react';
 
 type MapViewProps = {
@@ -17,6 +17,7 @@ type MarkerProps = {
   coordinate: { latitude: number; longitude: number };
   title?: string;
   children?: ReactNode;
+  onPress?: () => void;
 };
 
 // MapView para Web - Placeholder con grid oscuro
@@ -33,11 +34,11 @@ export function MapView({ style, region, children }: MapViewProps) {
 }
 
 // Marker para Web - Posicionado en el centro como demo
-export function Marker({ children }: MarkerProps) {
+export function Marker({ children, onPress }: MarkerProps) {
   return (
-    <View style={styles.webMarker}>
+    <TouchableOpacity style={styles.webMarker} onPress={onPress} activeOpacity={0.8}>
       {children}
-    </View>
+    </TouchableOpacity>
   );
 }
 

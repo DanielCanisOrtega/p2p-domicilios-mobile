@@ -1,18 +1,10 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { THEME } from '../../constants/theme';
-
-interface Driver {
-  id: number;
-  nombre?: string;
-  calificacion?: number;
-  vehiculo?: string;
-  distancia?: number;
-  disponible: boolean;
-}
+import { NearbyDriver } from '../../services/driverService';
 
 interface DriverCardProps {
-  driver: Driver;
-  onPress?: (driver: Driver) => void;
+  driver: NearbyDriver;
+  onPress?: (driver: NearbyDriver) => void;
 }
 
 export default function DriverCard({ driver, onPress }: DriverCardProps) {

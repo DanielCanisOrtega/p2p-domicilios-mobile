@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { MapView, Marker } from '../../src/components/map';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -43,6 +44,7 @@ const CUSTOM_MAP_STYLE = [
 ];
 
 export default function ClienteMapScreen() {
+  const router = useRouter();
   const { user } = useContext(AuthContext);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [drivers, setDrivers] = useState<NearbyDriver[]>([]);
@@ -192,6 +194,26 @@ export default function ClienteMapScreen() {
     [filteredDrivers]
   );
 
+  const openDriverProfile = useCallback(
+    (driver: NearbyDriver) => {
+      router.push({
+        pathname: '/(cliente)/perfil-domiciliario',
+        params: {
+          driverId: String(driver.id),
+          driverName: driver.nombre || `Domiciliario ${driver.id}`,
+          driverPhone: driver.telefono || '',
+          driverEmail: driver.email || '',
+          driverVehicle: driver.vehiculo || 'Moto',
+          driverPlate: driver.placa || '',
+          driverVerified: driver.verificado ? 'true' : 'false',
+          driverRating: String(driver.calificacion ?? ''),
+          driverDistanceKm: String(driver.distancia ?? ''),
+        },
+      });
+    },
+    [router]
+  );
+
   // Pantalla de error si no hay ubicación
   if (locationError) {
     return (
@@ -255,6 +277,7 @@ export default function ClienteMapScreen() {
               longitude: driver.longitud,
             }}
             title={driver.nombre || 'Domiciliario'}
+            onPress={() => openDriverProfile(driver)}
           >
             <View style={styles.driverMarker}>
               <Ionicons name="bicycle" size={16} color="#000" />
@@ -292,7 +315,7 @@ export default function ClienteMapScreen() {
         ) : (
           <ScrollView style={styles.driversList} showsVerticalScrollIndicator={false}>
             {filteredDrivers.map((driver) => (
-              <DriverCard key={driver.id} driver={driver} />
+              <DriverCard key={driver.id} driver={driver} onPress={openDriverProfile} />
             ))}
 
             {filteredDrivers.length === 0 && (
