@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Dimensions, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { NearbyDriver, driverService } from '../../src/services/driverService';
 
@@ -8,6 +8,7 @@ const { width } = Dimensions.get('window');
 
 export default function PedidosTab() {
   const router = useRouter();
+  const { preferredDriverId } = useLocalSearchParams<{ preferredDriverId?: string }>();
   const [drivers, setDrivers] = useState<NearbyDriver[]>([]);
   const [loading, setLoading] = useState(true);
   const [driverListOpen, setDriverListOpen] = useState(false);
@@ -44,6 +45,23 @@ export default function PedidosTab() {
     return driver.telefono?.trim() || 'No disponible';
   };
 
+  const pickPreferredDriver = useCallback(
+    (availableDrivers: NearbyDriver[]) => {
+      const activeDrivers = availableDrivers.filter((driver) => driver.disponible !== false);
+      const parsedPreferredDriverId = Number(preferredDriverId);
+
+      if (Number.isFinite(parsedPreferredDriverId) && parsedPreferredDriverId > 0) {
+        const preferredDriver = activeDrivers.find((driver) => driver.id === parsedPreferredDriverId);
+        if (preferredDriver) {
+          return preferredDriver;
+        }
+      }
+
+      return activeDrivers[0] ?? null;
+    },
+    [preferredDriverId]
+  );
+
   useEffect(() => {
     const loadDrivers = async () => {
       try {
@@ -65,8 +83,7 @@ export default function PedidosTab() {
         );
 
         setDrivers(nearbyDrivers);
-        const firstActiveDriver = nearbyDrivers.find((driver) => driver.disponible !== false) ?? null;
-        setSelectedDriver(firstActiveDriver);
+        setSelectedDriver(pickPreferredDriver(nearbyDrivers));
       } catch (error) {
         console.error('Error cargando domiciliarios en solicitar:', error);
       } finally {
@@ -75,7 +92,7 @@ export default function PedidosTab() {
     };
 
     void loadDrivers();
-  }, []);
+  }, [pickPreferredDriver]);
 
   return (
     <SafeAreaView style={styles.container}>
