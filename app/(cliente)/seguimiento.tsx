@@ -1,9 +1,10 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
 import { MapView, Marker } from '../../src/components/map';
 import { THEME } from '../../src/constants/theme';
+import RatingModal from '../../src/components/rating/RatingModal';
 
 const CUSTOM_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
@@ -42,7 +43,10 @@ export default function SeguimientoScreen() {
     driverLon?: string;
     userLat?: string;
     userLon?: string;
+    idServicio?: string;
   }>();
+
+  const [showRatingModal, setShowRatingModal] = useState(false);
 
   const userLat = Number(params.userLat ?? 7.8939);
   const userLon = Number(params.userLon ?? -72.4842);
@@ -57,6 +61,7 @@ export default function SeguimientoScreen() {
   const verified = params.driverVerified === 'true';
   const rating = params.driverRating || 'N/A';
   const distance = params.driverDistanceKm ? `${Number(params.driverDistanceKm).toFixed(1)} km` : 'N/A';
+  const idServicio = params.idServicio;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -181,7 +186,19 @@ export default function SeguimientoScreen() {
         </View>
 
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.actionBtn}>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => {
+              if (!idServicio) {
+                Alert.alert('Error', 'ID de servicio no disponible');
+                return;
+              }
+              router.push({
+                pathname: '/(cliente)/mensajes',
+                params: { idServicio }
+              });
+            }}
+          >
             <MaterialCommunityIcons name="message-text-outline" size={20} color="#e8e8e8" />
             <Text style={styles.actionText}>Chat</Text>
           </TouchableOpacity>
@@ -196,7 +213,31 @@ export default function SeguimientoScreen() {
             <Text style={styles.actionText}>Ayuda</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={styles.rateButton}
+          onPress={() => {
+            if (!idServicio) {
+              Alert.alert('Error', 'ID de servicio no disponible');
+              return;
+            }
+            setShowRatingModal(true);
+          }}
+        >
+          <Ionicons name="star" size={20} color={THEME.background} />
+          <Text style={styles.rateButtonText}>Calificar servicio</Text>
+        </TouchableOpacity>
       </View>
+
+      <RatingModal
+        visible={showRatingModal}
+        idServicio={Number(idServicio || '0')}
+        driverName={driverName}
+        onClose={() => setShowRatingModal(false)}
+        onSuccess={() => {
+          Alert.alert('Éxito', 'Calificación enviada correctamente');
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -424,5 +465,20 @@ const styles = StyleSheet.create({
     color: '#ededed',
     fontSize: 14,
     fontWeight: '500',
+  },
+  rateButton: {
+    backgroundColor: THEME.warning,
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  rateButtonText: {
+    color: THEME.background,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
