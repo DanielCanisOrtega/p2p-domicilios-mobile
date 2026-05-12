@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Constants from "expo-constants";
 import axios from "axios";
+import Constants from "expo-constants";
 
 const TOKEN_KEY = "@p2p_token";
 
@@ -8,17 +8,26 @@ type ExpoExtra = {
   backendUrl?: string;
 };
 
+const LOCAL_BACKEND_URL = "http://localhost:8080";
+// Production backend disabled for local-only testing.
+// const PROD_BACKEND_URL = "https://p2p-domicilios-backend-1.onrender.com";
+
 const getConfiguredBackendUrl = (): string | undefined => {
   const value = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.backendUrl;
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 };
 
 const getBaseURL = (): string => {
-  return getConfiguredBackendUrl() || "https://p2p-domicilios-backend-1.onrender.com";
+  // Local-only mode: always use localhost.
+  // If you ever need a different backend, change this constant manually.
+  return LOCAL_BACKEND_URL;
 };
 
+export const BASE_URL = getBaseURL();
+console.debug('[api] baseURL =', BASE_URL);
+
 export const api = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: BASE_URL,
   // Render can take longer to wake up after idle periods.
   timeout: 60000,
   headers: {
@@ -36,6 +45,17 @@ api.interceptors.request.use(
       }
     } catch (error) {
       console.error("Error al obtener token:", error);
+    }
+    // Debug outgoing payloads in development
+    try {
+      if (config && config.url && config.method && config.data) {
+        const fullUrl = `${config.baseURL}${config.url}`;
+        if (fullUrl.includes('/api/orders/create')) {
+          console.debug('[api] Request to create order ->', { method: config.method, url: fullUrl, data: config.data });
+        }
+      }
+    } catch (err) {
+      // ignore logging errors
     }
     return config;
   },

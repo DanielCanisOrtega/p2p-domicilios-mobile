@@ -59,7 +59,8 @@ export default function ConfirmarPedido() {
   const [destinationCoords, setDestinationCoords] = useState<Location.LocationGeocodedLocation | null>(null);
   const [estimatedKm, setEstimatedKm] = useState(2.5);
   const [estimatedMinutes, setEstimatedMinutes] = useState(12);
-  const [estimatedFare, setEstimatedFare] = useState(8500);
+  const [estimatedFare, setEstimatedFare] = useState(0);
+  const [fareInputTouched, setFareInputTouched] = useState(false);
   const [isEstimating, setIsEstimating] = useState(false);
 
   const activeDrivers = useMemo(
@@ -92,6 +93,11 @@ export default function ConfirmarPedido() {
   };
 
   const getClientId = () => user?.id || user?.userId || 1;
+
+  const handleSelectDriver = (driver: NearbyDriver) => {
+    setSelectedDriver(driver);
+    setDriverListOpen(false);
+  };
 
   const loadNearbyDrivers = useCallback(async () => {
       setLoadingDrivers(true);
@@ -174,58 +180,80 @@ export default function ConfirmarPedido() {
 
       setEstimatedKm(totalKm);
       setEstimatedMinutes(computedMinutes);
-      setEstimatedFare(computedFare);
+      // Do NOT overwrite `estimatedFare` so the final sent tarifa is always what the user types.
       setIsEstimating(false);
     };
 
     recalculateEstimate();
-  }, [selectedDriver]);
+  }, [selectedDriver, fareInputTouched]);
+
+  const handleFareChange = (value: string) => {
+    const onlyDigits = value.replace(/[^0-9]/g, '');
+    const nextFare = onlyDigits.length > 0 ? Number(onlyDigits) : 0;
+    setFareInputTouched(true);
+    setEstimatedFare(nextFare);
+  };
 
   const enviarPedido = async () => {
     console.log("LOG: 1. Iniciando proceso...");
     if (!origen.trim()) return Alert.alert('Error', 'Escribe el lugar de recogida');
     if (!destino.trim()) return Alert.alert("Error", "Escribe el destino");
-    if (!selectedDriver) return Alert.alert('Sin domiciliario', 'Selecciona un domiciliario activo para continuar.');
+
+    if (!fareInputTouched || !Number.isFinite(estimatedFare) || estimatedFare <= 0) {
+      return Alert.alert('Error', 'Escribe un monto válido para el servicio');
+    }
 
     setLoading(true);
     try {
       const payload = {
         id_cliente: getClientId(),
-        id_domiciliario: selectedDriver.id,
+        id_domiciliario: selectedDriver?.id,
         direccion_origen: origen,
         direccion_destino: destino,
         lat_origen: originCoords?.latitude || currentLocation?.coords.latitude || 7.8939,
         lon_origen: originCoords?.longitude || currentLocation?.coords.longitude || -72.4842,
         lat_destino: destinationCoords?.latitude || (currentLocation?.coords.latitude || 7.8939) - 0.003,
         lon_destino: destinationCoords?.longitude || (currentLocation?.coords.longitude || -72.4842) + 0.003,
-        tarifa: estimatedFare,
+        // Send only `tarifa` as the authoritative fare value (backend's DB field)
+        tarifa: Number(estimatedFare),
         tiempo_estimado: estimatedMinutes,
         descripcion: descripcion,
         estado: 'CREADO'
       };
+      // Final debug log: exact JSON body that will be sent to backend
+      try {
+        console.log('[confirmar-pedido] payload (final):', JSON.stringify(payload));
+      } catch (e) {
+        console.log('[confirmar-pedido] payload (final) object:', payload);
+      }
 
       console.log("LOG: 2. Enviando a Java...", payload);
       const res = await orderService.createOrder(payload);
       
       console.log("LOG: 3. Éxito:", res);
       Alert.alert('Solicitud confirmada', 'Tu pedido fue creado con éxito. Te avisaremos cuando un domiciliario lo acepte.');
+
+      const trackingDriver = selectedDriver;
       
+      // Navigate to tracking and include created order id so the client can receive contraofertas
       router.push({
         pathname: '/(cliente)/seguimiento',
         params: {
-          driverId: String(selectedDriver.id),
-          driverName: selectedDriver.nombre || 'Domiciliario asignado',
-          driverPhone: selectedDriver.telefono || 'No disponible',
-          driverEmail: selectedDriver.email || 'No disponible',
-          driverVehicle: selectedDriver.vehiculo || 'Moto',
-          driverPlate: selectedDriver.placa || 'Sin placa',
-          driverVerified: selectedDriver.verificado ? 'true' : 'false',
-          driverRating: String(selectedDriver.calificacion ?? 'N/A'),
-          driverDistanceKm: String(selectedDriver.distancia ?? ''),
-          driverLat: String(selectedDriver.latitud || currentLocation?.coords.latitude || 7.8939),
-          driverLon: String(selectedDriver.longitud || currentLocation?.coords.longitude || -72.4842),
+          driverId: String(trackingDriver?.id || ''),
+          driverName: trackingDriver?.nombre || 'Domiciliario pendiente',
+          driverPhone: trackingDriver?.telefono || 'No disponible',
+          driverEmail: trackingDriver?.email || 'No disponible',
+          driverVehicle: trackingDriver?.vehiculo || 'Moto',
+          driverPlate: trackingDriver?.placa || 'Sin placa',
+          driverVerified: trackingDriver?.verificado ? 'true' : 'false',
+          driverRating: String(trackingDriver?.calificacion ?? 'N/A'),
+          driverDistanceKm: String(trackingDriver?.distancia ?? ''),
+          driverLat: String(trackingDriver?.latitud || currentLocation?.coords.latitude || 7.8939),
+          driverLon: String(trackingDriver?.longitud || currentLocation?.coords.longitude || -72.4842),
           userLat: String(currentLocation?.coords.latitude || 7.8939),
           userLon: String(currentLocation?.coords.longitude || -72.4842),
+          idServicio: String(res?.id ?? ''),
+          originalTarifa: String(payload.tarifa ?? ''),
         },
       });
 
@@ -366,10 +394,8 @@ export default function ConfirmarPedido() {
                     <TouchableOpacity
                       key={driver.id}
                       style={[styles.driverOption, isSelected && styles.driverOptionSelected]}
-                      onPress={() => {
-                        setSelectedDriver(driver);
-                        setDriverListOpen(false);
-                      }}
+                      onPress={() => handleSelectDriver(driver)}
+                      disabled={false}
                     >
                       <View style={styles.driverOptionMain}>
                         <View style={styles.driverOptionHeader}>
@@ -443,12 +469,26 @@ export default function ConfirmarPedido() {
           />
 
           {/* RESUMEN */}
+          <View style={styles.fareCard}>
+            <View style={styles.fareHeader}>
+              <Text style={styles.summaryLabel}>Tarifa estimada</Text>
+              <Text style={styles.fareHint}>editable</Text>
+            </View>
+            <TextInput
+              value={String(estimatedFare || '')}
+              onChangeText={handleFareChange}
+              keyboardType="numeric"
+              placeholder="Ej. 8500"
+              placeholderTextColor="#6f7785"
+              style={styles.fareInput}
+            />
+            <Text style={styles.fareHelpText}>
+              Ajusta solo la tarifa estimada antes de confirmar.
+            </Text>
+          </View>
+
           <View style={styles.summaryRow}>
             <View>
-              <Text style={styles.summaryLabel}>Tarifa estimada</Text>
-              <Text style={styles.summaryPrice}>${estimatedFare.toLocaleString('es-CO')}</Text>
-            </View>
-            <View style={{alignItems: 'flex-end'}}>
               <Text style={styles.summaryLabel}>Tiempo estimado</Text>
               <Text style={styles.summaryTime}>~{estimatedMinutes} min</Text>
               <Text style={styles.summaryDistance}>{estimatedKm.toFixed(1)} km</Text>
@@ -550,6 +590,11 @@ const styles = StyleSheet.create({
   summaryTime: { color: '#17d5aa', fontSize: 24, fontWeight: 'bold' },
   summaryDistance: { color: '#8d95a4', fontSize: 13, marginTop: 2 },
   summaryCalculating: { color: '#8d95a4', fontSize: 12, marginTop: 4 },
+  fareCard: { backgroundColor: '#171a22', borderRadius: 10, padding: 15, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(23, 213, 170, 0.2)' },
+  fareHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  fareHint: { color: '#17d5aa', fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+  fareInput: { backgroundColor: '#0f1420', color: 'white', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 18, borderWidth: 1, borderColor: '#2a3040' },
+  fareHelpText: { color: '#8d95a4', fontSize: 12, marginTop: 8 },
   confirmBtn: { backgroundColor: '#17d5aa', paddingVertical: 20, borderRadius: 10, alignItems: 'center' },
   confirmBtnText: { color: '#0a0f1c', fontSize: 22, fontWeight: 'bold' }
 });

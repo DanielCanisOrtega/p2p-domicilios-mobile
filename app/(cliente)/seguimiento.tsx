@@ -1,10 +1,10 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MapView, Marker } from '../../src/components/map';
-import { THEME } from '../../src/constants/theme';
 import RatingModal from '../../src/components/rating/RatingModal';
+import { THEME } from '../../src/constants/theme';
 
 const CUSTOM_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
@@ -47,6 +47,7 @@ export default function SeguimientoScreen() {
   }>();
 
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const [orderStatus, setOrderStatus] = useState<string | null>(null);
 
   const userLat = Number(params.userLat ?? 7.8939);
   const userLon = Number(params.userLon ?? -72.4842);
@@ -62,6 +63,115 @@ export default function SeguimientoScreen() {
   const rating = params.driverRating || 'N/A';
   const distance = params.driverDistanceKm ? `${Number(params.driverDistanceKm).toFixed(1)} km` : 'N/A';
   const idServicio = params.idServicio;
+  const originalTarifa = Number(params.originalTarifa ?? '0');
+
+  const [latestOffer, setLatestOffer] = useState<number | null>(null);
+  const pollingRef = useRef<number | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+  const [isHandlingOffer, setIsHandlingOffer] = useState(false);
+  
+  useEffect(() => {
+    if (!idServicio) return;
+
+    let mounted = true;
+    const poll = async () => {
+      try {
+        setIsPolling(true);
+        const order = await (await import('../../src/services/orderService')).orderService.getOrderById(Number(idServicio));
+
+        // Update visible order status so UI doesn't assume 'aceptado'
+        if (mounted) setOrderStatus((order.estado || '').toString().toLowerCase());
+
+        const oferta = order.oferta_actual ?? order.tarifa ?? order.precio ?? null;
+        const ofertaNum = oferta ? Number(oferta) : null;
+
+        if (mounted && ofertaNum && ofertaNum !== latestOffer && ofertaNum !== originalTarifa && !isHandlingOffer) {
+          setLatestOffer(ofertaNum);
+          // Show decision dialog to user
+          setIsHandlingOffer(true);
+
+          const title = 'Contraoferta recibida';
+          const message = `El domiciliario propone ${ofertaNum}. ¿Aceptas, rechazas o haces contraoferta?`;
+
+          // Use window.prompt on web for counteroffer input; fallback to simple Alert choices
+          if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
+            const choice = window.confirm(message + '\n\nAceptar = OK, Cancelar = abrir diálogo de rechazo/contraoferta');
+            if (choice) {
+              try {
+                await (await import('../../src/services/orderService')).orderService.acceptOrder(Number(idServicio));
+                Alert.alert('Aceptado', 'Has aceptado la contraoferta. Continúa el flujo.');
+              } catch (err: any) {
+                console.error('Error aceptando contraoferta:', err);
+                Alert.alert('Error', 'No se pudo aceptar la contraoferta. Intenta de nuevo.');
+              }
+            } else {
+              // Ask for counteroffer value
+              const value = window.prompt('Escribe tu contraoferta (número):', String(originalTarifa || ''));
+              if (value && !isNaN(Number(value))) {
+                try {
+                  await (await import('../../src/services/orderService')).orderService.counterOfferOrder(Number(idServicio), Number(value));
+                  Alert.alert('Contraoferta enviada', 'Tu contraoferta fue enviada al domiciliario.');
+                } catch (err: any) {
+                  console.error('Error enviando contraoferta cliente:', err);
+                  Alert.alert('Error', 'No se pudo enviar la contraoferta. Intenta de nuevo.');
+                }
+              } else {
+                // Treat as rejection
+                Alert.alert('Rechazado', 'Has rechazado la oferta. Puedes solicitar un nuevo servicio.');
+              }
+            }
+          } else {
+            // RN Alert with buttons
+            Alert.alert(title, message, [
+              {
+                text: 'Aceptar',
+                onPress: async () => {
+                  try {
+                    await (await import('../../src/services/orderService')).orderService.acceptOrder(Number(idServicio));
+                    Alert.alert('Aceptado', 'Has aceptado la contraoferta. Continúa el flujo.');
+                  } catch (err: any) {
+                    console.error('Error aceptando contraoferta:', err);
+                    Alert.alert('Error', 'No se pudo aceptar la contraoferta. Intenta de nuevo.');
+                  } finally {
+                    setIsHandlingOffer(false);
+                  }
+                },
+              },
+              {
+                text: 'Contraoferta',
+                onPress: async () => {
+                  // Fallback: navigate to chat so user can coordinate or implement a small modal later
+                  setIsHandlingOffer(false);
+                  router.push({ pathname: '/(cliente)/mensajes', params: { idServicio } });
+                },
+              },
+              {
+                text: 'Rechazar',
+                style: 'destructive',
+                onPress: () => {
+                  setIsHandlingOffer(false);
+                  Alert.alert('Rechazado', 'Has rechazado la oferta. Puedes solicitar un nuevo servicio.');
+                },
+              },
+            ]);
+          }
+
+        }
+      } catch (err) {
+        console.error('Error polling order:', err);
+      } finally {
+        setIsPolling(false);
+        if (mounted) pollingRef.current = window.setTimeout(poll, 5000);
+      }
+    };
+
+    poll();
+
+    return () => {
+      mounted = false;
+      if (pollingRef.current) clearTimeout(pollingRef.current);
+    };
+  }, [idServicio, latestOffer, isHandlingOffer, originalTarifa, router]);
 
   return (
     <SafeAreaView style={styles.container}>

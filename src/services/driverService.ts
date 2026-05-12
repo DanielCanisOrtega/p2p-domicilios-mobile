@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, BASE_URL } from "./api";
 
 export interface NearbyDriver {
   id: number;
@@ -22,7 +22,7 @@ export const driverService = {
     radiusKm = 5
   ): Promise<NearbyDriver[]> {
     try {
-      const response = await api.get<NearbyDriver[]>("/drivers/nearby", {
+      const response = await api.get<NearbyDriver[]>(`${BASE_URL}/drivers/nearby`, {
         params: {
           lat: latitude,
           lon: longitude,
