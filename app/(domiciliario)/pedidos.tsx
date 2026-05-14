@@ -6,6 +6,7 @@ import { MapView, Marker } from '../../src/components/map';
 import ServicioCompletadoScreen from '../../src/components/ServicioCompletadoScreen';
 import { orderService } from '../../src/services/orderService';
 import { pendingOrderStore } from '../../src/services/pendingOrderStore';
+import RatingModal from '../../src/components/rating/RatingModal';
 
 // 🎨 Paleta de colores Premium Dark
 const THEME = {
@@ -41,6 +42,7 @@ export default function DetallePedidoDomiciliario() {
   const [showClientOfferModal, setShowClientOfferModal] = useState(false);
   const [clientOfferValue, setClientOfferValue] = useState<number | null>(null);
   const pollingRef = useRef<number | null>(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
 
   useEffect(() => {
     setPedidoEstado('pendiente');
@@ -84,6 +86,7 @@ export default function DetallePedidoDomiciliario() {
   const originLon = Number(params.originLon || -72.5078);
   const destinationLat = Number(params.destinationLat || originLat + 0.002);
   const destinationLon = Number(params.destinationLon || originLon + 0.002);
+  const clientId = Number(params.clientId || params.idCliente || params.id_cliente || 0);
 
   const CUSTOM_MAP_STYLE = [
     { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
@@ -272,6 +275,7 @@ export default function DetallePedidoDomiciliario() {
       const ok = typeof window !== 'undefined' ? window.confirm('¿Confirmas que el servicio fue completado?') : true;
       if (!ok) return;
       setPedidoEstado('finalizado');
+      setShowRatingModal(true);
       return;
     }
 
@@ -281,6 +285,7 @@ export default function DetallePedidoDomiciliario() {
         text: 'Terminar',
         onPress: () => {
           setPedidoEstado('finalizado');
+          setShowRatingModal(true);
         },
       },
     ]);
@@ -289,17 +294,32 @@ export default function DetallePedidoDomiciliario() {
   // Si el servicio está finalizado, mostrar solo la pantalla de completado
   if (pedidoEstado === 'finalizado') {
     return (
-      <ServicioCompletadoScreen
-        clientName={clientName}
-        orderId={orderId}
-        fare={fare}
-        clientRating={clientRating}
-        comment='"Muy puntual y amable, recogió el paquete sin problema. ¡Excelente!"'
-        tags={['Puntual', 'Amable', 'Paquete en buen estado']}
-        earnings={fare}
-        dailyTotal="$42.000"
-        onSearchNew={() => router.replace('/(domiciliario)/mapa')}
-      />
+      <>
+        <ServicioCompletadoScreen
+          clientName={clientName}
+          orderId={orderId}
+          fare={fare}
+          clientRating={clientRating}
+          comment='"Muy puntual y amable, recogió el paquete sin problema. ¡Excelente!"'
+          tags={['Puntual', 'Amable', 'Paquete en buen estado']}
+          earnings={fare}
+          dailyTotal="$42.000"
+          onSearchNew={() => router.replace('/(domiciliario)/mapa')}
+        />
+
+        <RatingModal
+          visible={showRatingModal}
+          idServicio={orderId}
+          driverName={clientName}
+          role="DOMICILIARIO"
+          idCliente={clientId || undefined}
+          onClose={() => setShowRatingModal(false)}
+          onSuccess={() => {
+            Alert.alert('Éxito', 'Calificación enviada correctamente');
+            setShowRatingModal(false);
+          }}
+        />
+      </>
     );
   }
 

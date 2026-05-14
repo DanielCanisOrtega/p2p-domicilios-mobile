@@ -17,6 +17,8 @@ interface RatingModalProps {
   visible: boolean;
   idServicio: number;
   driverName?: string;
+  role?: 'CLIENT' | 'DOMICILIARIO';
+  idCliente?: number;
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -25,6 +27,8 @@ export default function RatingModal({
   visible,
   idServicio,
   driverName = 'el domiciliario',
+  role = 'CLIENT',
+  idCliente,
   onClose,
   onSuccess,
 }: RatingModalProps) {
@@ -33,10 +37,15 @@ export default function RatingModal({
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (rating === 0) {
-      Alert.alert('Error', 'Por favor selecciona una calificación');
-      return;
-    }
+      if (rating === 0) {
+        Alert.alert('Error', 'Por favor selecciona una calificación');
+        return;
+      }
+
+      if (role === 'DOMICILIARIO' && !idCliente) {
+        Alert.alert('Error', 'No se pudo identificar al cliente para calificar');
+        return;
+      }
 
     try {
       setLoading(true);
@@ -44,6 +53,7 @@ export default function RatingModal({
         idServicio,
         puntuacion: rating,
         comentario: comment.trim() || undefined,
+        idCliente: role === 'DOMICILIARIO' ? idCliente : undefined,
       });
 
       Alert.alert('¡Gracias!', 'Tu calificación ha sido enviada');

@@ -8,12 +8,17 @@ type ExpoExtra = {
 };
 
 const getConfiguredBackendUrl = (): string | undefined => {
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (typeof envUrl === 'string' && envUrl.trim().length > 0) {
+    return envUrl.trim();
+  }
+
   const value = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.backendUrl;
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 };
 
 const getBaseURL = (): string => {
-  const base = getConfiguredBackendUrl() || 'https://p2p-domicilios-backend-1.onrender.com';
+  const base = getConfiguredBackendUrl() || 'http://localhost:8080';
   return base.replace(/\/$/, '');
 };
 
@@ -24,6 +29,13 @@ export interface ChatMessage {
   contenido: string;
   fechaEnvio: string;
   nombreUsuario?: string;
+}
+
+export interface TrackingUpdate {
+  idServicio: number;
+  latitud?: number;
+  longitud?: number;
+  tiempoEstimado?: number;
 }
 
 class WebSocketService {
@@ -117,6 +129,45 @@ class WebSocketService {
     console.log('Subscribed to', destination);
 
     return () => this.unsubscribeFromChat(idServicio);
+  }
+
+  subscribeToTracking(idServicio: number, callback: (update: TrackingUpdate) => void): () => void {
+    if (!this.client || !this.isConnected) {
+      console.warn('WebSocket not connected. Cannot subscribe to tracking.');
+      return () => {};
+    }
+
+    const destination = `/topic/servicio/${idServicio}`;
+
+    if (this.subscriptions.has(destination)) {
+      console.log('Already subscribed to', destination);
+      return () => this.unsubscribeFromTracking(idServicio);
+    }
+
+    const subscription = this.client.subscribe(destination, (message) => {
+      try {
+        const data = JSON.parse(message.body);
+        callback(data);
+      } catch (error) {
+        console.error('Error parsing tracking message:', error);
+      }
+    });
+
+    this.subscriptions.set(destination, subscription);
+    console.log('Subscribed to', destination);
+
+    return () => this.unsubscribeFromTracking(idServicio);
+  }
+
+  unsubscribeFromTracking(idServicio: number): void {
+    const destination = `/topic/servicio/${idServicio}`;
+    const subscription = this.subscriptions.get(destination);
+
+    if (subscription) {
+      subscription.unsubscribe();
+      this.subscriptions.delete(destination);
+      console.log('Unsubscribed from', destination);
+    }
   }
 
   unsubscribeFromChat(idServicio: number): void {

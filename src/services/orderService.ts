@@ -110,10 +110,15 @@ export const orderService = {
 
   async getOrderById(orderId: number): Promise<Order> {
     try {
-      const response = await api.get<any>(`${BASE_URL}/api/orders/${orderId}`);
-      // Normalize backend shape so callers always receive the same fields
-      const normalized = normalizeOrder(response.data);
-      console.debug('[orderService] getOrderById normalized:', normalized);
+      const response = await api.get<any>(`${BASE_URL}/api/orders/${orderId}/status`);
+      const normalized = normalizeOrder({
+        id_servicio: orderId,
+        estado: response.data?.estado,
+        oferta_actual: response.data?.oferta_actual,
+        tarifa: response.data?.tarifa,
+        ultima_oferta_por: response.data?.ultima_oferta_por,
+        tiempo_estimado: response.data?.tiempo_estimado,
+      });
       return normalized;
     } catch (error: any) {
       throw {

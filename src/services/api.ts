@@ -9,17 +9,23 @@ type ExpoExtra = {
 };
 
 const LOCAL_BACKEND_URL = "http://localhost:8080";
-// Production backend disabled for local-only testing.
-// const PROD_BACKEND_URL = "https://p2p-domicilios-backend-1.onrender.com";
 
 const getConfiguredBackendUrl = (): string | undefined => {
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (typeof envUrl === "string" && envUrl.trim().length > 0) {
+    return envUrl.trim();
+  }
+
   const value = (Constants.expoConfig?.extra as ExpoExtra | undefined)?.backendUrl;
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 };
 
 const getBaseURL = (): string => {
-  // Local-only mode: always use localhost.
-  // If you ever need a different backend, change this constant manually.
+  const configured = getConfiguredBackendUrl();
+  if (configured) {
+    return configured;
+  }
+
   return LOCAL_BACKEND_URL;
 };
 

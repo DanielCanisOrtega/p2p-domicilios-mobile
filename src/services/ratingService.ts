@@ -4,6 +4,7 @@ export interface RatingRequest {
   idServicio: number;
   puntuacion: number;
   comentario?: string;
+  idCliente?: number;
 }
 
 export interface Rating {
@@ -14,6 +15,7 @@ export interface Rating {
   puntuacion: number;
   comentario?: string;
   fechaCreacion: string;
+  roleCalificador?: string;
 }
 
 export const ratingService = {
@@ -32,6 +34,24 @@ export const ratingService = {
       return response.data;
     } catch (error: any) {
       throw error.response?.data || { error: 'Error al obtener calificación' };
+    }
+  },
+
+  async getRatingCliente(idServicio: number): Promise<Rating> {
+    try {
+      const response = await api.get<Rating>(`/api/calificaciones/servicio/${idServicio}/cliente`);
+      return response.data;
+    } catch (error: any) {
+      throw error.response?.data || { error: 'Error al obtener calificación del cliente' };
+    }
+  },
+
+  async getRatingDomiciliario(idServicio: number): Promise<Rating> {
+    try {
+      const response = await api.get<Rating>(`/api/calificaciones/servicio/${idServicio}/domiciliario`);
+      return response.data;
+    } catch (error: any) {
+      throw error.response?.data || { error: 'Error al obtener calificación del domiciliario' };
     }
   },
 };

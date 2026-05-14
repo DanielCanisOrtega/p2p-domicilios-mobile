@@ -15,6 +15,7 @@ import { MapView, Marker } from '../../src/components/map';
 import { THEME } from '../../src/constants/theme';
 import { AuthContext } from '../../src/context/AuthContext';
 import { orderService, type Order } from '../../src/services/orderService';
+import { driverService } from '../../src/services/driverService';
 import { pendingOrderStore } from '../../src/services/pendingOrderStore';
 
 const CUSTOM_MAP_STYLE = [
@@ -39,7 +40,10 @@ export default function DomiciliarioMapScreen() {
   const [location, setLocation] = useState<any>(null);
   const [isActive, setIsActive] = useState(true);
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [activeOrderId, setActiveOrderId] = useState<number | null>(null);
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const latestActiveServiceIdRef = useRef<number | null>(null);
 
   const latestPendingOrder = [...pendingOrders].sort((left, right) => {
     const leftTime = left.fecha_creacion ? new Date(left.fecha_creacion).getTime() : 0;
@@ -60,7 +64,12 @@ export default function DomiciliarioMapScreen() {
       }
 
       const orders = await orderService.getPendingOrders();
-      setPendingOrders(pendingOrderStore.filterVisible(orders));
+      const visibleOrders = pendingOrderStore.filterVisible(orders);
+      setPendingOrders(visibleOrders);
+
+      const acceptedOrder = visibleOrders.find((order) => (order.estado || '').toUpperCase() === 'ACEPTADO');
+      setActiveOrderId(acceptedOrder?.id ?? null);
+      latestActiveServiceIdRef.current = acceptedOrder?.id ?? null;
     } catch (error: any) {
       console.error('Error obteniendo órdenes:', error);
 
@@ -114,6 +123,12 @@ export default function DomiciliarioMapScreen() {
 
         const loc = await Location.getCurrentPositionAsync({});
         setLocation(loc);
+        void driverService.updateLocation({
+          latitud: loc.coords.latitude,
+          longitud: loc.coords.longitude,
+          disponible: isActive,
+          idServicio: activeOrderId ?? undefined,
+        });
       } catch (error) {
         console.error('Error obteniendo ubicación:', error);
         const defaultLoc = {
@@ -122,7 +137,7 @@ export default function DomiciliarioMapScreen() {
         setLocation(defaultLoc);
       }
     })();
-  }, []);
+  }, [isActive, activeOrderId]);
 
   // Polling de órdenes asignadas
   useFocusEffect(
@@ -143,7 +158,51 @@ export default function DomiciliarioMapScreen() {
     }, [fetchAssignedOrders])
   );
 
+  useEffect(() => {
+    if (!location) return;
+
+    const sendLocation = async (coords: { latitude: number; longitude: number }) => {
+      try {
+        await driverService.updateLocation({
+          latitud: coords.latitude,
+          longitud: coords.longitude,
+          disponible: isActive,
+          idServicio: latestActiveServiceIdRef.current ?? undefined,
+        });
+      } catch (error) {
+        // ignore background errors
+      }
+    };
+
+    const startTracking = () => {
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current);
+      }
+
+      locationIntervalRef.current = setInterval(async () => {
+        try {
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          setLocation(loc);
+          await sendLocation(loc.coords);
+        } catch (error) {
+          // ignore location errors
+        }
+      }, 15000);
+    };
+
+    startTracking();
+
+    return () => {
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current);
+      }
+    };
+  }, [location, isActive, activeOrderId]);
+
   const openRequest = (request: Order) => {
+    latestActiveServiceIdRef.current = request.id;
     router.push({
       pathname: '/(domiciliario)/pedidos',
       params: {
@@ -151,6 +210,7 @@ export default function DomiciliarioMapScreen() {
         clientName: request.cliente?.nombre || 'Cliente',
         clientRating: String(request.cliente?.calificacion || '4.5'),
         clientServices: '0',
+        clientId: request.id_cliente ? String(request.id_cliente) : undefined,
         originAddress: request.direccion_origen || 'Origen',
         destinationAddress: request.direccion_destino || 'Destino',
         // prefer tarifa (DB field) when present

@@ -1,10 +1,12 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MapView, Marker } from '../../src/components/map';
 import RatingModal from '../../src/components/rating/RatingModal';
 import { THEME } from '../../src/constants/theme';
+import { driverService } from '../../src/services/driverService';
+import { websocketService, type TrackingUpdate } from '../../src/services/websocketService';
 
 const CUSTOM_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
@@ -48,6 +50,7 @@ export default function SeguimientoScreen() {
 
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
+  const [tracking, setTracking] = useState<TrackingUpdate | null>(null);
 
   const userLat = Number(params.userLat ?? 7.8939);
   const userLon = Number(params.userLon ?? -72.4842);
@@ -69,6 +72,21 @@ export default function SeguimientoScreen() {
   const pollingRef = useRef<number | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [isHandlingOffer, setIsHandlingOffer] = useState(false);
+  const trackingPollRef = useRef<number | null>(null);
+
+  const trackingCoords = useMemo(() => {
+    if (tracking && Number.isFinite(tracking.latitud) && Number.isFinite(tracking.longitud)) {
+      return {
+        latitude: Number(tracking.latitud),
+        longitude: Number(tracking.longitud),
+      };
+    }
+
+    return {
+      latitude: driverLat,
+      longitude: driverLon,
+    };
+  }, [tracking, driverLat, driverLon]);
   
   useEffect(() => {
     if (!idServicio) return;
@@ -173,6 +191,47 @@ export default function SeguimientoScreen() {
     };
   }, [idServicio, latestOffer, isHandlingOffer, originalTarifa, router]);
 
+  useEffect(() => {
+    if (!idServicio) return;
+
+    let mounted = true;
+    let unsubscribe: (() => void) | null = null;
+
+    const pollTracking = async () => {
+      try {
+        const data = await driverService.getTracking(Number(idServicio));
+        if (mounted) {
+          setTracking(data);
+        }
+      } catch (err) {
+        // ignore polling errors, rely on ws
+      } finally {
+        if (mounted) trackingPollRef.current = window.setTimeout(pollTracking, 15000);
+      }
+    };
+
+    const connectTracking = async () => {
+      try {
+        await websocketService.connect();
+        if (!mounted) return;
+        unsubscribe = websocketService.subscribeToTracking(Number(idServicio), (update) => {
+          setTracking(update);
+        });
+      } catch (err) {
+        pollTracking();
+      }
+    };
+
+    connectTracking();
+    pollTracking();
+
+    return () => {
+      mounted = false;
+      if (unsubscribe) unsubscribe();
+      if (trackingPollRef.current) clearTimeout(trackingPollRef.current);
+    };
+  }, [idServicio]);
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.mapArea}>
@@ -192,7 +251,7 @@ export default function SeguimientoScreen() {
             </View>
           </Marker>
 
-          <Marker coordinate={{ latitude: driverLat, longitude: driverLon }} title={driverName}>
+          <Marker coordinate={trackingCoords} title={driverName}>
             <View style={styles.driverMarkerPin}>
               <MaterialCommunityIcons name="motorbike" size={16} color="#0a0f1c" />
             </View>
@@ -246,7 +305,9 @@ export default function SeguimientoScreen() {
           </View>
 
           <View style={styles.minutesBox}>
-            <Text style={styles.minutesValue}>7</Text>
+            <Text style={styles.minutesValue}>
+              {tracking?.tiempoEstimado != null ? String(tracking.tiempoEstimado) : '--'}
+            </Text>
             <Text style={styles.minutesLabel}>MIN</Text>
           </View>
         </View>

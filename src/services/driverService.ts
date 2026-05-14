@@ -15,6 +15,13 @@ export interface NearbyDriver {
   distancia?: number;
 }
 
+export interface DriverLocationPayload {
+  latitud: number;
+  longitud: number;
+  disponible?: boolean;
+  idServicio?: number;
+}
+
 export const driverService = {
   async getNearbyDrivers(
     latitude: number,
@@ -54,6 +61,41 @@ export const driverService = {
       throw {
         status,
         message: backendMessage || "Error obteniendo domiciliarios cercanos",
+      };
+    }
+  },
+
+  async updateLocation(payload: DriverLocationPayload): Promise<NearbyDriver> {
+    try {
+      const response = await api.post<NearbyDriver>(`${BASE_URL}/drivers/location`, payload);
+      return response.data;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const backendMessage = error?.response?.data?.message || error?.response?.data?.error;
+
+      throw {
+        status,
+        message: backendMessage || "Error actualizando ubicación",
+      };
+    }
+  },
+
+  async getTracking(idServicio: number) {
+    try {
+      const response = await api.get(`${BASE_URL}/drivers/orders/${idServicio}/tracking`);
+      return response.data as {
+        idServicio: number;
+        latitud: number | null;
+        longitud: number | null;
+        tiempoEstimado?: number | null;
+      };
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const backendMessage = error?.response?.data?.message || error?.response?.data?.error;
+
+      throw {
+        status,
+        message: backendMessage || "Error obteniendo tracking",
       };
     }
   },
