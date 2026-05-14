@@ -1,22 +1,22 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Alert,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { THEME } from '../../src/constants/theme';
-import { chatService, ChatMessage } from '../../src/services/chatService';
-import { websocketService } from '../../src/services/websocketService';
-import { AuthContext } from '../../src/context/AuthContext';
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { THEME } from "../../src/constants/theme";
+import { AuthContext } from "../../src/context/AuthContext";
+import { ChatMessage, chatService } from "../../src/services/chatService";
+import { websocketService } from "../../src/services/websocketService";
 
 export default function DomiciliarioMensajesScreen() {
   const router = useRouter();
@@ -24,15 +24,16 @@ export default function DomiciliarioMensajesScreen() {
   const { user } = useContext(AuthContext);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputText, setInputText] = useState('');
+  const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
+  const [hasService, setHasService] = useState(true);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    if (!idServicio) {
-      Alert.alert('Error', 'No se proporcionó ID de servicio');
-      router.back();
+    if (!idServicio || Number.isNaN(Number(idServicio))) {
+      setHasService(false);
+      setLoading(false);
       return;
     }
 
@@ -51,15 +52,17 @@ export default function DomiciliarioMensajesScreen() {
       setConnected(true);
 
       await chatService.initChat(Number(idServicio!));
-      const previousMessages = await chatService.getMessages(Number(idServicio!));
+      const previousMessages = await chatService.getMessages(
+        Number(idServicio!),
+      );
       setMessages(previousMessages);
 
       websocketService.subscribeToChat(Number(idServicio!), (newMessage) => {
         setMessages((prev) => [...prev, newMessage]);
       });
     } catch (error: any) {
-      console.error('Error initializing chat:', error);
-      Alert.alert('Error', error?.error || 'No se pudo inicializar el chat');
+      console.error("Error initializing chat:", error);
+      Alert.alert("Error", error?.error || "No se pudo inicializar el chat");
     } finally {
       setLoading(false);
     }
@@ -72,15 +75,16 @@ export default function DomiciliarioMensajesScreen() {
 
     try {
       websocketService.sendMessage(Number(idServicio!), inputText.trim());
-      setInputText('');
+      setInputText("");
     } catch (error: any) {
-      console.error('Error sending message:', error);
-      Alert.alert('Error', 'No se pudo enviar el mensaje');
+      console.error("Error sending message:", error);
+      Alert.alert("Error", "No se pudo enviar el mensaje");
     }
   };
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
-    const isOwnMessage = item.idUsuario === user?.userId || item.idUsuario === user?.id;
+    const isOwnMessage =
+      item.idUsuario === user?.userId || item.idUsuario === user?.id;
 
     return (
       <View
@@ -90,13 +94,15 @@ export default function DomiciliarioMensajesScreen() {
         ]}
       >
         {!isOwnMessage && (
-          <Text style={styles.senderName}>{item.nombreUsuario || 'Usuario'}</Text>
+          <Text style={styles.senderName}>
+            {item.nombreUsuario || "Usuario"}
+          </Text>
         )}
         <Text style={styles.messageText}>{item.contenido}</Text>
         <Text style={styles.messageTime}>
-          {new Date(item.fechaEnvio).toLocaleTimeString('es-CO', {
-            hour: '2-digit',
-            minute: '2-digit',
+          {new Date(item.fechaEnvio).toLocaleTimeString("es-CO", {
+            hour: "2-digit",
+            minute: "2-digit",
           })}
         </Text>
       </View>
@@ -112,25 +118,45 @@ export default function DomiciliarioMensajesScreen() {
     );
   }
 
+  if (!hasService) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>
+          No tienes un servicio activo para chatear.
+        </Text>
+        <Text style={styles.loadingText}>
+          Abre el chat desde el seguimiento del pedido.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
           <Ionicons name="arrow-back" size={24} color={THEME.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chat - Pedido #{idServicio}</Text>
-        <View style={[styles.statusIndicator, connected && styles.statusConnected]} />
+        <View
+          style={[styles.statusIndicator, connected && styles.statusConnected]}
+        />
       </View>
 
       <FlatList
         ref={flatListRef}
         data={messages}
         renderItem={renderMessage}
-        keyExtractor={(item, index) => item.idMensaje?.toString() || index.toString()}
+        keyExtractor={(item, index) =>
+          item.idMensaje?.toString() || index.toString()
+        }
         contentContainerStyle={styles.messagesList}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
         onLayout={() => flatListRef.current?.scrollToEnd()}
@@ -153,7 +179,10 @@ export default function DomiciliarioMensajesScreen() {
           maxLength={500}
         />
         <TouchableOpacity
-          style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+          style={[
+            styles.sendButton,
+            !inputText.trim() && styles.sendButtonDisabled,
+          ]}
           onPress={sendMessage}
           disabled={!inputText.trim() || !connected}
         >
@@ -172,8 +201,8 @@ const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
     backgroundColor: THEME.background,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   loadingText: {
     color: THEME.textSecondary,
@@ -181,8 +210,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: THEME.card,
@@ -195,7 +224,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     color: THEME.textPrimary,
   },
   statusIndicator: {
@@ -212,22 +241,22 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   messageContainer: {
-    maxWidth: '75%',
+    maxWidth: "75%",
     padding: 12,
     borderRadius: 12,
     marginBottom: 12,
   },
   ownMessage: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
     backgroundColor: THEME.primary,
   },
   otherMessage: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     backgroundColor: THEME.card,
   },
   senderName: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     color: THEME.textSecondary,
     marginBottom: 4,
   },
@@ -239,12 +268,12 @@ const styles = StyleSheet.create({
   messageTime: {
     fontSize: 10,
     color: THEME.textSecondary,
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 40,
   },
   emptyText: {
@@ -257,8 +286,8 @@ const styles = StyleSheet.create({
     color: THEME.inactive,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     padding: 12,
     backgroundColor: THEME.card,
     borderTopWidth: 1,
@@ -279,8 +308,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: THEME.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   sendButtonDisabled: {
     opacity: 0.5,
