@@ -1,4 +1,5 @@
 const dismissedOrderIds = new Set<string>();
+const activeOrderIds = new Set<string>();
 
 export const pendingOrderStore = {
   dismiss(orderId: number | string) {
@@ -15,5 +16,18 @@ export const pendingOrderStore = {
 
   clear() {
     dismissedOrderIds.clear();
+    activeOrderIds.clear();
+  },
+
+  rememberActive(orderId: number | string) {
+    activeOrderIds.add(String(orderId));
+  },
+
+  forgetActive(orderId: number | string) {
+    activeOrderIds.delete(String(orderId));
+  },
+
+  getActiveIds() {
+    return Array.from(activeOrderIds);
   },
 };

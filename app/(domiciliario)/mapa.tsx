@@ -14,8 +14,8 @@ import {
 import { MapView, Marker } from '../../src/components/map';
 import { THEME } from '../../src/constants/theme';
 import { AuthContext } from '../../src/context/AuthContext';
-import { orderService, type Order } from '../../src/services/orderService';
-import { driverService } from '../../src/services/driverService';
+import { orderService, type Order, normalizeOrder } from '../../src/services/orderService';
+import { driverService, type DriverActiveOrder } from '../../src/services/driverService';
 import { pendingOrderStore } from '../../src/services/pendingOrderStore';
 
 const CUSTOM_MAP_STYLE = [
@@ -41,6 +41,8 @@ export default function DomiciliarioMapScreen() {
   const [isActive, setIsActive] = useState(true);
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [activeOrderId, setActiveOrderId] = useState<number | null>(null);
+  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
+  const [activeLoadError, setActiveLoadError] = useState<string | null>(null);
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const latestActiveServiceIdRef = useRef<number | null>(null);
@@ -109,6 +111,35 @@ export default function DomiciliarioMapScreen() {
     }
   }, [isActive]);
 
+  const normalizeActiveOrders = useCallback((rawOrders: DriverActiveOrder[]) => {
+    return rawOrders
+      .map((raw) => normalizeOrder(raw))
+      .filter((order) => order.id > 0);
+  }, []);
+
+  const loadActiveOrders = useCallback(async () => {
+    try {
+      const data = await driverService.getActiveOrders();
+      const normalized = normalizeActiveOrders(data);
+      setActiveOrders(normalized);
+      setActiveLoadError(null);
+
+      if (normalized.length > 0) {
+        const firstActive = normalized[0];
+        setActiveOrderId(firstActive.id);
+        latestActiveServiceIdRef.current = firstActive.id;
+        pendingOrderStore.rememberActive(firstActive.id);
+      }
+    } catch (error: any) {
+      console.error('Error cargando servicios activos:', error);
+      setActiveLoadError('No se pudieron cargar los servicios activos');
+    }
+  }, [normalizeActiveOrders]);
+
+  useEffect(() => {
+    void loadActiveOrders();
+  }, [loadActiveOrders]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -156,6 +187,12 @@ export default function DomiciliarioMapScreen() {
         }
       };
     }, [fetchAssignedOrders])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadActiveOrders();
+    }, [loadActiveOrders])
   );
 
   useEffect(() => {
@@ -214,6 +251,29 @@ export default function DomiciliarioMapScreen() {
         originAddress: request.direccion_origen || 'Origen',
         destinationAddress: request.direccion_destino || 'Destino',
         // prefer tarifa (DB field) when present
+        fare: `$${request.tarifa ?? request.precio ?? 0}`,
+        distance: request.tiempo_estimado ? `~${request.tiempo_estimado} min` : 'Pendiente',
+        originLat: request.lat_origen ? String(request.lat_origen) : undefined,
+        originLon: request.lon_origen ? String(request.lon_origen) : undefined,
+        destinationLat: request.lat_destino ? String(request.lat_destino) : undefined,
+        destinationLon: request.lon_destino ? String(request.lon_destino) : undefined,
+      },
+    });
+  };
+
+  const openActiveOrder = (request: Order) => {
+    latestActiveServiceIdRef.current = request.id;
+    pendingOrderStore.rememberActive(request.id);
+    router.push({
+      pathname: '/(domiciliario)/pedidos',
+      params: {
+        orderId: String(request.id),
+        clientName: request.cliente?.nombre || 'Cliente',
+        clientRating: String(request.cliente?.calificacion || '4.5'),
+        clientServices: '0',
+        clientId: request.id_cliente ? String(request.id_cliente) : undefined,
+        originAddress: request.direccion_origen || 'Origen',
+        destinationAddress: request.direccion_destino || 'Destino',
         fare: `$${request.tarifa ?? request.precio ?? 0}`,
         distance: request.tiempo_estimado ? `~${request.tiempo_estimado} min` : 'Pendiente',
         originLat: request.lat_origen ? String(request.lat_origen) : undefined,
@@ -288,6 +348,41 @@ export default function DomiciliarioMapScreen() {
 
       {/* Bandeja de pedidos */}
       <View style={styles.requestTray}>
+        {activeOrders.length > 0 && (
+          <View style={styles.activeTray}>
+            <View style={styles.activeTrayHeader}>
+              <Text style={styles.activeTrayTitle}>Servicios activos</Text>
+              <Text style={styles.activeTrayMeta}>{activeOrders.length}</Text>
+            </View>
+
+            {activeOrders.slice(0, 2).map((order) => (
+              <TouchableOpacity
+                key={`active-${order.id}`}
+                style={styles.activeCard}
+                onPress={() => openActiveOrder(order)}
+              >
+                <View style={styles.activeCardHeader}>
+                  <Text style={styles.activeCardId}>#{order.id}</Text>
+                  <Text style={styles.activeCardStatus}>{(order.estado || '').toUpperCase()}</Text>
+                </View>
+                <Text style={styles.activeCardRoute}>
+                  {order.direccion_origen} → {order.direccion_destino}
+                </Text>
+                <Text style={styles.activeCardMeta}>
+                  Tarifa: ${order.tarifa ?? order.precio ?? 0}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            {activeOrders.length > 2 && (
+              <Text style={styles.activeTrayHint}>Tienes más servicios activos. Abre uno para continuar.</Text>
+            )}
+
+            {activeLoadError && (
+              <Text style={styles.activeTrayError}>{activeLoadError}</Text>
+            )}
+          </View>
+        )}
         <Text style={styles.requestTrayTitle}>Pedidos disponibles ({latestPendingOrder ? 1 : 0})</Text>
         {!latestPendingOrder ? (
           <Text style={styles.requestEmpty}>No hay pedidos pendientes ahora mismo.</Text>
@@ -433,6 +528,71 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     gap: 10,
+  },
+  activeTray: {
+    backgroundColor: '#111720',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#174033',
+  },
+  activeTrayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  activeTrayTitle: {
+    color: THEME.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  activeTrayMeta: {
+    color: '#8d95a4',
+    fontSize: 12,
+  },
+  activeCard: {
+    backgroundColor: '#171a22',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 10,
+  },
+  activeCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  activeCardId: {
+    color: '#8fd6ff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  activeCardStatus: {
+    color: THEME.primary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  activeCardRoute: {
+    color: THEME.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  activeCardMeta: {
+    color: THEME.textSecondary,
+    fontSize: 11,
+  },
+  activeTrayHint: {
+    color: '#8d95a4',
+    fontSize: 11,
+  },
+  activeTrayError: {
+    color: '#f0b4b4',
+    fontSize: 11,
+    marginTop: 4,
   },
   requestTrayTitle: {
     color: THEME.textPrimary,

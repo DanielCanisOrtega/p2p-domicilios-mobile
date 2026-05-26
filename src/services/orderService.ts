@@ -22,6 +22,7 @@ export interface Order {
   precio?: number;
   tarifa?: number;
   oferta_actual?: number;
+  ultima_oferta_por?: string;
   fecha_creacion?: string;
   tiempo_estimado?: number;
   lat_origen?: number;
@@ -37,7 +38,7 @@ export interface Order {
   };
 }
 
-const normalizeOrder = (raw: any): Order => {
+export const normalizeOrder = (raw: any): Order => {
   const clienteRaw = raw?.cliente || raw?.customer || raw?.usuario || raw?.client || {};
 
   const normalizedId =
@@ -61,9 +62,10 @@ const normalizeOrder = (raw: any): Order => {
     descripcion: raw?.descripcion ?? raw?.detalle ?? raw?.observacion ?? '',
     tarifa: Number(raw?.tarifa ?? raw?.tarifa_actual ?? raw?.tarifaActual ?? raw?.monto ?? raw?.precio ?? 0) || undefined,
     oferta_actual: Number(raw?.oferta_actual ?? raw?.ofertaActual ?? raw?.oferta ?? 0) || undefined,
+    ultima_oferta_por: raw?.ultima_oferta_por ?? raw?.ultimaOfertaPor ?? raw?.offerBy ?? raw?.offer_by,
     // keep precio but prefer explicit precio if present; UI should prefer tarifa
     precio: Number(raw?.precio ?? raw?.monto ?? 0) || undefined,
-    fecha_creacion: raw?.fecha_creacion ?? raw?.fechaCreacion ?? raw?.createdAt,
+    fecha_creacion: raw?.fecha_creacion ?? raw?.fechaCreacion ?? raw?.createdAt ?? raw?.fechaSolicitud ?? raw?.fecha_solicitud,
     tiempo_estimado: Number(raw?.tiempo_estimado ?? raw?.tiempoEstimado ?? raw?.eta ?? 0) || undefined,
     lat_origen: Number(raw?.lat_origen ?? raw?.latOrigen ?? raw?.originLat ?? raw?.latitud_origen ?? 0) || undefined,
     lon_origen: Number(raw?.lon_origen ?? raw?.lonOrigen ?? raw?.originLon ?? raw?.longitud_origen ?? 0) || undefined,
@@ -124,6 +126,19 @@ export const orderService = {
       throw {
         status: error.response?.status,
         error: error.response?.data || { error: "Error al obtener el pedido" },
+      };
+    }
+  },
+
+  async getOrdersByClient(): Promise<Order[]> {
+    try {
+      const response = await api.get<Order[]>(`${BASE_URL}/api/orders/client`);
+      const payload = Array.isArray(response.data) ? response.data : [];
+      return payload.map(normalizeOrder).filter((order) => order.id > 0);
+    } catch (error: any) {
+      throw {
+        status: error.response?.status,
+        error: error.response?.data || { error: "Error al obtener pedidos del cliente" },
       };
     }
   },

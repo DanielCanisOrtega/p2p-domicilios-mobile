@@ -46,11 +46,13 @@ export default function SeguimientoScreen() {
     userLat?: string;
     userLon?: string;
     idServicio?: string;
+    originalTarifa?: string;
   }>();
 
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
   const [tracking, setTracking] = useState<TrackingUpdate | null>(null);
+  const [pollingError, setPollingError] = useState<string | null>(null);
 
   const userLat = Number(params.userLat ?? 7.8939);
   const userLon = Number(params.userLon ?? -72.4842);
@@ -73,6 +75,51 @@ export default function SeguimientoScreen() {
   const [isPolling, setIsPolling] = useState(false);
   const [isHandlingOffer, setIsHandlingOffer] = useState(false);
   const trackingPollRef = useRef<number | null>(null);
+  const pollingErrorCountRef = useRef(0);
+
+  const normalizedStatus = useMemo(() => {
+    const raw = (orderStatus || '').toString().trim().toUpperCase();
+    if (!raw) return 'CREADO';
+    return raw;
+  }, [orderStatus]);
+
+  const statusConfig = useMemo(() => {
+    const isCreated = normalizedStatus === 'CREADO' || normalizedStatus === 'OFERTA_EN_CURSO';
+    const isAccepted = normalizedStatus === 'ACEPTADO';
+    const isCompleted = normalizedStatus === 'COMPLETADO';
+    const isRejected = normalizedStatus === 'RECHAZADO';
+
+    const canTrack = isAccepted || isCompleted;
+    const showDriver = canTrack;
+
+    let statusTitle = 'Solicitud enviada';
+    let statusSubtitle = 'Esperando respuesta del domiciliario.';
+
+    if (normalizedStatus === 'OFERTA_EN_CURSO') {
+      statusTitle = 'Contraoferta en curso';
+      statusSubtitle = 'Revisa la contraoferta del domiciliario.';
+    } else if (isAccepted) {
+      statusTitle = 'Pedido aceptado';
+      statusSubtitle = 'Tu domiciliario va en camino.';
+    } else if (isCompleted) {
+      statusTitle = 'Pedido completado';
+      statusSubtitle = 'El servicio fue finalizado.';
+    } else if (isRejected) {
+      statusTitle = 'Pedido rechazado';
+      statusSubtitle = 'Puedes crear una nueva solicitud con otro precio.';
+    }
+
+    return {
+      isCreated,
+      isAccepted,
+      isCompleted,
+      isRejected,
+      canTrack,
+      showDriver,
+      statusTitle,
+      statusSubtitle,
+    };
+  }, [normalizedStatus]);
 
   const trackingCoords = useMemo(() => {
     if (tracking && Number.isFinite(tracking.latitud) && Number.isFinite(tracking.longitud)) {
@@ -98,12 +145,23 @@ export default function SeguimientoScreen() {
         const order = await (await import('../../src/services/orderService')).orderService.getOrderById(Number(idServicio));
 
         // Update visible order status so UI doesn't assume 'aceptado'
-        if (mounted) setOrderStatus((order.estado || '').toString().toLowerCase());
+        if (mounted) setOrderStatus((order.estado || '').toString());
+        if (mounted) setPollingError(null);
+        pollingErrorCountRef.current = 0;
 
         const oferta = order.oferta_actual ?? order.tarifa ?? order.precio ?? null;
         const ofertaNum = oferta ? Number(oferta) : null;
+        const offerBy = (order.ultima_oferta_por || '').toString().trim().toUpperCase();
+        const isDriverOffer = offerBy === 'DOMICILIARIO' || order.estado?.toString().toUpperCase() === 'OFERTA_EN_CURSO';
 
-        if (mounted && ofertaNum && ofertaNum !== latestOffer && ofertaNum !== originalTarifa && !isHandlingOffer) {
+        if (
+          mounted &&
+          ofertaNum &&
+          ofertaNum !== latestOffer &&
+          ofertaNum !== originalTarifa &&
+          !isHandlingOffer &&
+          isDriverOffer
+        ) {
           setLatestOffer(ofertaNum);
           // Show decision dialog to user
           setIsHandlingOffer(true);
@@ -177,9 +235,14 @@ export default function SeguimientoScreen() {
         }
       } catch (err) {
         console.error('Error polling order:', err);
+        if (mounted) {
+          setPollingError('No se pudo actualizar el estado. Reintentando...');
+        }
+        pollingErrorCountRef.current = Math.min(pollingErrorCountRef.current + 1, 6);
       } finally {
         setIsPolling(false);
-        if (mounted) pollingRef.current = window.setTimeout(poll, 5000);
+        const backoffMs = 5000 + pollingErrorCountRef.current * 2000;
+        if (mounted) pollingRef.current = window.setTimeout(poll, backoffMs);
       }
     };
 
@@ -201,7 +264,12 @@ export default function SeguimientoScreen() {
       try {
         const data = await driverService.getTracking(Number(idServicio));
         if (mounted) {
-          setTracking(data);
+          setTracking({
+            idServicio: data.idServicio,
+            latitud: data.latitud ?? undefined,
+            longitud: data.longitud ?? undefined,
+            tiempoEstimado: data.tiempoEstimado ?? undefined,
+          });
         }
       } catch (err) {
         // ignore polling errors, rely on ws
@@ -251,11 +319,13 @@ export default function SeguimientoScreen() {
             </View>
           </Marker>
 
-          <Marker coordinate={trackingCoords} title={driverName}>
-            <View style={styles.driverMarkerPin}>
-              <MaterialCommunityIcons name="motorbike" size={16} color="#0a0f1c" />
-            </View>
-          </Marker>
+          {statusConfig.showDriver && (
+            <Marker coordinate={trackingCoords} title={driverName}>
+              <View style={styles.driverMarkerPin}>
+                <MaterialCommunityIcons name="motorbike" size={16} color="#0a0f1c" />
+              </View>
+            </Marker>
+          )}
         </MapView>
 
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -268,29 +338,65 @@ export default function SeguimientoScreen() {
 
         <View style={styles.stepper}>
           <View style={styles.stepItem}>
-            <View style={[styles.stepCircle, styles.stepDone]}>
-              <Ionicons name="checkmark" size={13} color="#0a0f1c" />
+            <View style={[styles.stepCircle, statusConfig.isCreated ? styles.stepDone : styles.stepPending]}>
+              <Ionicons name="checkmark" size={13} color={statusConfig.isCreated ? '#0a0f1c' : '#6d6d6d'} />
             </View>
-            <Text style={styles.stepLabel}>Aceptado</Text>
+            <Text style={statusConfig.isCreated ? styles.stepLabel : styles.stepLabelMuted}>Solicitud</Text>
           </View>
 
           <View style={styles.stepLine} />
 
           <View style={styles.stepItem}>
-            <View style={[styles.stepCircle, styles.stepDone]}>
-              <MaterialCommunityIcons name="bicycle" size={14} color="#0a0f1c" />
+            <View style={[styles.stepCircle, statusConfig.isAccepted ? styles.stepDone : styles.stepPending]}>
+              <MaterialCommunityIcons name="bicycle" size={14} color={statusConfig.isAccepted ? '#0a0f1c' : '#6d6d6d'} />
             </View>
-            <Text style={styles.stepLabel}>En camino</Text>
+            <Text style={statusConfig.isAccepted ? styles.stepLabel : styles.stepLabelMuted}>Aceptado</Text>
           </View>
 
-          <View style={[styles.stepLine, styles.stepLineActive]} />
+          <View style={[styles.stepLine, statusConfig.isAccepted || statusConfig.isCompleted ? styles.stepLineActive : null]} />
 
           <View style={styles.stepItem}>
-            <View style={[styles.stepCircle, styles.stepPending]}>
-              <Ionicons name="checkmark" size={13} color="#6d6d6d" />
+            <View style={[styles.stepCircle, statusConfig.isCompleted ? styles.stepDone : styles.stepPending]}>
+              <Ionicons name="checkmark" size={13} color={statusConfig.isCompleted ? '#0a0f1c' : '#6d6d6d'} />
             </View>
-            <Text style={styles.stepLabelMuted}>Entregado</Text>
+            <Text style={statusConfig.isCompleted ? styles.stepLabel : styles.stepLabelMuted}>Entregado</Text>
           </View>
+        </View>
+
+        {pollingError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{pollingError}</Text>
+            <TouchableOpacity
+              style={styles.errorAction}
+              onPress={() => {
+                if (pollingRef.current) clearTimeout(pollingRef.current);
+                pollingErrorCountRef.current = 0;
+                setPollingError(null);
+                pollingRef.current = window.setTimeout(() => {
+                  void (async () => {
+                    try {
+                      setIsPolling(true);
+                      const order = await (await import('../../src/services/orderService')).orderService.getOrderById(Number(idServicio));
+                      setOrderStatus((order.estado || '').toString());
+                      setPollingError(null);
+                    } catch (err) {
+                      console.error('Error polling order (manual):', err);
+                      setPollingError('No se pudo actualizar el estado. Reintentando...');
+                    } finally {
+                      setIsPolling(false);
+                    }
+                  })();
+                }, 300);
+              }}
+            >
+              <Text style={styles.errorActionText}>{isPolling ? 'Actualizando...' : 'Reintentar'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={styles.statusCard}>
+          <Text style={styles.statusTitle}>{statusConfig.statusTitle}</Text>
+          <Text style={styles.statusSubtitle}>{statusConfig.statusSubtitle}</Text>
         </View>
 
         <View style={styles.driverCard}>
@@ -306,7 +412,7 @@ export default function SeguimientoScreen() {
 
           <View style={styles.minutesBox}>
             <Text style={styles.minutesValue}>
-              {tracking?.tiempoEstimado != null ? String(tracking.tiempoEstimado) : '--'}
+              {statusConfig.canTrack && tracking?.tiempoEstimado != null ? String(tracking.tiempoEstimado) : '--'}
             </Text>
             <Text style={styles.minutesLabel}>MIN</Text>
           </View>
@@ -390,6 +496,10 @@ export default function SeguimientoScreen() {
           onPress={() => {
             if (!idServicio) {
               Alert.alert('Error', 'ID de servicio no disponible');
+              return;
+            }
+            if (!statusConfig.isCompleted) {
+              Alert.alert('Aun no', 'Podras calificar cuando el servicio este completado.');
               return;
             }
             setShowRatingModal(true);
@@ -651,5 +761,53 @@ const styles = StyleSheet.create({
     color: THEME.background,
     fontSize: 16,
     fontWeight: '600',
+  },
+  statusCard: {
+    backgroundColor: '#151515',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#2d2d2d',
+    marginBottom: 14,
+  },
+  statusTitle: {
+    color: '#e9e9e9',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  statusSubtitle: {
+    color: '#9a9a9a',
+    fontSize: 12,
+  },
+  errorBanner: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#5b262b',
+    backgroundColor: '#241113',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  errorText: {
+    color: '#f0b4b4',
+    fontSize: 12,
+    flex: 1,
+  },
+  errorAction: {
+    borderRadius: 6,
+    backgroundColor: '#fff',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  errorActionText: {
+    color: '#0a0f1c',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

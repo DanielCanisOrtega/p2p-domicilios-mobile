@@ -22,6 +22,36 @@ export interface DriverLocationPayload {
   idServicio?: number;
 }
 
+export interface DriverActiveOrder {
+  id_servicio?: number;
+  idServicio?: number;
+  id_cliente?: number;
+  idCliente?: number;
+  id_domiciliario?: number;
+  idDomiciliario?: number;
+  direccion_origen?: string;
+  direccionOrigen?: string;
+  direccion_destino?: string;
+  direccionDestino?: string;
+  tarifa?: number;
+  ofertaActual?: number;
+  oferta_actual?: number;
+  estado?: string;
+  descripcion?: string;
+  tiempo_estimado?: number;
+  tiempoEstimado?: number;
+  lat_origen?: number;
+  latOrigen?: number;
+  lon_origen?: number;
+  lonOrigen?: number;
+  lat_destino?: number;
+  latDestino?: number;
+  lon_destino?: number;
+  lonDestino?: number;
+  fecha_solicitud?: string;
+  fechaSolicitud?: string;
+}
+
 export const driverService = {
   async getNearbyDrivers(
     latitude: number,
@@ -96,6 +126,22 @@ export const driverService = {
       throw {
         status,
         message: backendMessage || "Error obteniendo tracking",
+      };
+    }
+  },
+
+  async getActiveOrders() {
+    try {
+      const response = await api.get<DriverActiveOrder[]>(`${BASE_URL}/drivers/orders/active`);
+      const payload = Array.isArray(response.data) ? response.data : [];
+      return payload;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const backendMessage = error?.response?.data?.message || error?.response?.data?.error;
+
+      throw {
+        status,
+        message: backendMessage || "Error obteniendo servicios activos",
       };
     }
   },

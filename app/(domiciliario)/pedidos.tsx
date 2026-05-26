@@ -60,8 +60,9 @@ export default function DetallePedidoDomiciliario() {
         const order = await orderService.getOrderById(orderId);
         const oferta = order.oferta_actual ?? order.tarifa ?? order.precio ?? null;
         const ofertaNum = oferta ? Number(oferta) : null;
+        const offerBy = (order.ultima_oferta_por || '').toString().trim().toUpperCase();
 
-        if (mounted && ofertaNum && ofertaNum !== latestObservedOffer) {
+        if (mounted && ofertaNum && ofertaNum !== latestObservedOffer && offerBy === 'CLIENTE') {
           // New offer detected — show modal to driver
           setLatestObservedOffer(ofertaNum);
           setClientOfferValue(ofertaNum);
@@ -114,6 +115,7 @@ export default function DetallePedidoDomiciliario() {
     try {
       await orderService.acceptOrder(orderId);
       pendingOrderStore.dismiss(orderId);
+      pendingOrderStore.rememberActive(orderId);
       setPedidoEstado('aceptado');
       Alert.alert('Pedido aceptado', 'La solicitud fue tomada correctamente');
     } catch (error: any) {
@@ -153,6 +155,7 @@ export default function DetallePedidoDomiciliario() {
     try {
       await orderService.rejectOrder(orderId);
       pendingOrderStore.dismiss(orderId);
+      pendingOrderStore.forgetActive(orderId);
       setPedidoEstado('rechazado');
       Alert.alert('Pedido rechazado', 'La solicitud fue rechazada y ya no aparecerá en pendientes', [
         {
@@ -233,6 +236,7 @@ export default function DetallePedidoDomiciliario() {
     try {
       await orderService.counterOfferOrder(orderId, newPrice);
       pendingOrderStore.dismiss(orderId);
+      pendingOrderStore.rememberActive(orderId);
       setShowCounterOfferModal(false);
       setCounterOfferPrice('');
       Alert.alert('Contraoferta enviada', 'Tu contraoferta fue enviada correctamente', [
@@ -275,6 +279,7 @@ export default function DetallePedidoDomiciliario() {
       const ok = typeof window !== 'undefined' ? window.confirm('¿Confirmas que el servicio fue completado?') : true;
       if (!ok) return;
       setPedidoEstado('finalizado');
+      pendingOrderStore.forgetActive(orderId);
       setShowRatingModal(true);
       return;
     }
@@ -285,6 +290,7 @@ export default function DetallePedidoDomiciliario() {
         text: 'Terminar',
         onPress: () => {
           setPedidoEstado('finalizado');
+          pendingOrderStore.forgetActive(orderId);
           setShowRatingModal(true);
         },
       },
@@ -406,10 +412,8 @@ export default function DetallePedidoDomiciliario() {
             </View>
           )}
 
-          {pedidoEstado !== 'finalizado' && (
-            <>
-              {/* TARJETA DEL CLIENTE */}
-              <View style={styles.clientCard}>
+          {/* TARJETA DEL CLIENTE */}
+          <View style={styles.clientCard}>
                 <View style={styles.clientAvatar}>
                   <Text style={{ fontSize: 24 }}>👤</Text>
                 </View>
@@ -420,10 +424,10 @@ export default function DetallePedidoDomiciliario() {
                     <Text style={styles.ratingText}>{clientRating} · {clientServices} servicios</Text>
                   </View>
                 </View>
-              </View>
+          </View>
 
-              {/* TARJETA DE DIRECCIONES */}
-              <View style={styles.addressCard}>
+          {/* TARJETA DE DIRECCIONES */}
+          <View style={styles.addressCard}>
                 <View style={styles.addressRow}>
                   <View style={[styles.dot, { backgroundColor: THEME.primary }]} />
                   <View>
@@ -441,10 +445,10 @@ export default function DetallePedidoDomiciliario() {
                     <Text style={styles.addrValue}>{destinationAddress}</Text>
                   </View>
                 </View>
-              </View>
+          </View>
 
-              {/* CAJAS DE TARIFA Y DISTANCIA */}
-              <View style={styles.statsRow}>
+          {/* CAJAS DE TARIFA Y DISTANCIA */}
+          <View style={styles.statsRow}>
                 <View style={styles.tarifaBox}>
                   <Text style={styles.statLabel}>TARIFA</Text>
                   <Text style={styles.tarifaValue}>{fare}</Text>
@@ -454,12 +458,12 @@ export default function DetallePedidoDomiciliario() {
                   <Text style={styles.statLabel}>DISTANCIA AL ORIGEN</Text>
                   <Text style={styles.distanciaValue}>{distance}</Text>
                 </View>
-              </View>
+          </View>
 
-              {/* BOTONES DE RECHAZAR, CONTRAOFERTA Y ACEPTAR */}
-              {pedidoEstado === 'pendiente' && (
-                <>
-                  <View style={styles.actionsRow}>
+          {/* BOTONES DE RECHAZAR, CONTRAOFERTA Y ACEPTAR */}
+          {pedidoEstado === 'pendiente' && (
+            <>
+              <View style={styles.actionsRow}>
                 <TouchableOpacity
                   style={[styles.btnRechazar, isLoading && styles.buttonDisabled]}
                   onPress={handleRechazar}
@@ -602,8 +606,6 @@ export default function DetallePedidoDomiciliario() {
               </Modal>
             </>
           )}
-            </>
-          )}
 
         </View>
       </ScrollView>
@@ -681,6 +683,12 @@ const styles = StyleSheet.create({
   textCancel: { color: '#fff', fontSize: 14, fontWeight: '600' },
   btnSendOffer: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   textSendOffer: { color: '#0a0f1c', fontSize: 14, fontWeight: 'bold' },
+  btnAcceptOffer: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  textAcceptOffer: { color: '#0a0f1c', fontSize: 13, fontWeight: 'bold' },
+  btnCounterFromClient: { flex: 1, backgroundColor: THEME.accent, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  textCounterFromClient: { color: '#0a0f1c', fontSize: 13, fontWeight: 'bold' },
+  btnRejectOffer: { flex: 1, backgroundColor: THEME.dangerBg, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  textRejectOffer: { color: THEME.dangerText, fontSize: 13, fontWeight: 'bold' },
 
   // ESTADO PEDIDO
   statusCard: { borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1 },

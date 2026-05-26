@@ -8,6 +8,7 @@ const BACKEND_URL = DEFAULT_LOCAL;
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY?.trim();
 
 const config: ExpoConfig = {
+  owner: "daniel777_expo",
   name: "p2p-domicilios-mobile",
   slug: "p2p-domicilios-mobile",
   version: "1.0.0",
@@ -73,9 +74,7 @@ const config: ExpoConfig = {
   extra: {
     router: {},
     backendUrl: BACKEND_URL,
-    eas: {
-      projectId: "909fdc8f-7982-4a90-b291-b5ee22e6a89f",
-    },
+    eas: { projectId: "a8da7108-d30a-4845-b68d-872715822293" }
   },
 };
 
