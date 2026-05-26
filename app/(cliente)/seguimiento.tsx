@@ -5,7 +5,7 @@ import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'r
 import { MapView, Marker } from '../../src/components/map';
 import RatingModal from '../../src/components/rating/RatingModal';
 import { THEME } from '../../src/constants/theme';
-import { driverService } from '../../src/services/driverService';
+import { driverService, type DriverDetail } from '../../src/services/driverService';
 import { websocketService, type TrackingUpdate } from '../../src/services/websocketService';
 
 const CUSTOM_MAP_STYLE = [
@@ -56,17 +56,21 @@ export default function SeguimientoScreen() {
 
   const userLat = Number(params.userLat ?? 7.8939);
   const userLon = Number(params.userLon ?? -72.4842);
-  const driverLat = Number(params.driverLat ?? userLat + 0.0015);
-  const driverLon = Number(params.driverLon ?? userLon + 0.0015);
-  const driverId = params.driverId || 'N/A';
-  const driverName = params.driverName || 'Domiciliario asignado';
+  const [driverInfo, setDriverInfo] = useState<DriverDetail | null>(null);
+
+  const driverLat = Number(driverInfo?.latitud ?? params.driverLat ?? userLat + 0.0015);
+  const driverLon = Number(driverInfo?.longitud ?? params.driverLon ?? userLon + 0.0015);
+  const driverId = String(driverInfo?.id ?? params.driverId ?? 'N/A');
+  const driverName = driverInfo?.nombre || params.driverName || 'Domiciliario asignado';
   const phone = params.driverPhone || 'No disponible';
-  const email = params.driverEmail || 'No disponible';
-  const vehicle = params.driverVehicle || 'Moto';
-  const plate = params.driverPlate || 'Sin placa';
-  const verified = params.driverVerified === 'true';
-  const rating = params.driverRating || 'N/A';
-  const distance = params.driverDistanceKm ? `${Number(params.driverDistanceKm).toFixed(1)} km` : 'N/A';
+  const email = driverInfo?.email || params.driverEmail || 'No disponible';
+  const vehicle = driverInfo?.vehiculo || params.driverVehicle || 'Moto';
+  const plate = driverInfo?.placa || params.driverPlate || 'Sin placa';
+  const verified = driverInfo?.verificado ?? (params.driverVerified === 'true');
+  const rating = driverInfo?.calificacion != null ? driverInfo.calificacion.toFixed(1) : (params.driverRating || 'N/A');
+  const distance = driverInfo?.distancia != null
+    ? `${Number(driverInfo.distancia).toFixed(1)} km`
+    : (params.driverDistanceKm ? `${Number(params.driverDistanceKm).toFixed(1)} km` : 'N/A');
   const idServicio = params.idServicio;
   const originalTarifa = Number(params.originalTarifa ?? '0');
 
@@ -76,50 +80,6 @@ export default function SeguimientoScreen() {
   const [isHandlingOffer, setIsHandlingOffer] = useState(false);
   const trackingPollRef = useRef<number | null>(null);
   const pollingErrorCountRef = useRef(0);
-
-  const normalizedStatus = useMemo(() => {
-    const raw = (orderStatus || '').toString().trim().toUpperCase();
-    if (!raw) return 'CREADO';
-    return raw;
-  }, [orderStatus]);
-
-  const statusConfig = useMemo(() => {
-    const isCreated = normalizedStatus === 'CREADO' || normalizedStatus === 'OFERTA_EN_CURSO';
-    const isAccepted = normalizedStatus === 'ACEPTADO';
-    const isCompleted = normalizedStatus === 'COMPLETADO';
-    const isRejected = normalizedStatus === 'RECHAZADO';
-
-    const canTrack = isAccepted || isCompleted;
-    const showDriver = canTrack;
-
-    let statusTitle = 'Solicitud enviada';
-    let statusSubtitle = 'Esperando respuesta del domiciliario.';
-
-    if (normalizedStatus === 'OFERTA_EN_CURSO') {
-      statusTitle = 'Contraoferta en curso';
-      statusSubtitle = 'Revisa la contraoferta del domiciliario.';
-    } else if (isAccepted) {
-      statusTitle = 'Pedido aceptado';
-      statusSubtitle = 'Tu domiciliario va en camino.';
-    } else if (isCompleted) {
-      statusTitle = 'Pedido completado';
-      statusSubtitle = 'El servicio fue finalizado.';
-    } else if (isRejected) {
-      statusTitle = 'Pedido rechazado';
-      statusSubtitle = 'Puedes crear una nueva solicitud con otro precio.';
-    }
-
-    return {
-      isCreated,
-      isAccepted,
-      isCompleted,
-      isRejected,
-      canTrack,
-      showDriver,
-      statusTitle,
-      statusSubtitle,
-    };
-  }, [normalizedStatus]);
 
   const trackingCoords = useMemo(() => {
     if (tracking && Number.isFinite(tracking.latitud) && Number.isFinite(tracking.longitud)) {
@@ -134,7 +94,53 @@ export default function SeguimientoScreen() {
       longitude: driverLon,
     };
   }, [tracking, driverLat, driverLon]);
-  
+
+  const normalizedStatus = useMemo(() => {
+    const raw = (orderStatus || '').toString().trim().toUpperCase();
+    if (!raw) return 'PENDIENTE';
+    return raw;
+  }, [orderStatus]);
+
+  const statusConfig = useMemo(() => {
+    const isPending = normalizedStatus === 'PENDIENTE';
+    const isAccepted = normalizedStatus === 'ACEPTADO';
+    const isEnCamino = normalizedStatus === 'EN_CAMINO';
+    const isEntregado = normalizedStatus === 'ENTREGADO';
+    const isCancelado = normalizedStatus === 'CANCELADO';
+
+    const canTrack = isAccepted || isEnCamino || isEntregado;
+    const showDriver = canTrack;
+
+    let statusTitle = 'Solicitud enviada';
+    let statusSubtitle = 'Esperando respuesta del domiciliario.';
+
+    if (isAccepted) {
+      statusTitle = 'Pedido aceptado';
+      statusSubtitle = 'Tu domiciliario va en camino.';
+    } else if (isEnCamino) {
+      statusTitle = 'En camino';
+      statusSubtitle = 'Tu pedido va en camino.';
+    } else if (isEntregado) {
+      statusTitle = 'Pedido entregado';
+      statusSubtitle = 'El servicio fue finalizado.';
+    } else if (isCancelado) {
+      statusTitle = 'Pedido cancelado';
+      statusSubtitle = 'Puedes crear una nueva solicitud.';
+    }
+
+    return {
+      isPending,
+      isAccepted,
+      isEnCamino,
+      isEntregado,
+      isCancelado,
+      canTrack,
+      showDriver,
+      statusTitle,
+      statusSubtitle,
+    };
+  }, [normalizedStatus]);
+
   useEffect(() => {
     if (!idServicio) return;
 
@@ -144,7 +150,6 @@ export default function SeguimientoScreen() {
         setIsPolling(true);
         const order = await (await import('../../src/services/orderService')).orderService.getOrderById(Number(idServicio));
 
-        // Update visible order status so UI doesn't assume 'aceptado'
         if (mounted) setOrderStatus((order.estado || '').toString());
         if (mounted) setPollingError(null);
         pollingErrorCountRef.current = 0;
@@ -152,7 +157,7 @@ export default function SeguimientoScreen() {
         const oferta = order.oferta_actual ?? order.tarifa ?? order.precio ?? null;
         const ofertaNum = oferta ? Number(oferta) : null;
         const offerBy = (order.ultima_oferta_por || '').toString().trim().toUpperCase();
-        const isDriverOffer = offerBy === 'DOMICILIARIO' || order.estado?.toString().toUpperCase() === 'OFERTA_EN_CURSO';
+        const isDriverOffer = offerBy === 'DOMICILIARIO';
 
         if (
           mounted &&
@@ -163,13 +168,11 @@ export default function SeguimientoScreen() {
           isDriverOffer
         ) {
           setLatestOffer(ofertaNum);
-          // Show decision dialog to user
           setIsHandlingOffer(true);
 
           const title = 'Contraoferta recibida';
           const message = `El domiciliario propone ${ofertaNum}. ¿Aceptas, rechazas o haces contraoferta?`;
 
-          // Use window.prompt on web for counteroffer input; fallback to simple Alert choices
           if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
             const choice = window.confirm(message + '\n\nAceptar = OK, Cancelar = abrir diálogo de rechazo/contraoferta');
             if (choice) {
@@ -181,7 +184,6 @@ export default function SeguimientoScreen() {
                 Alert.alert('Error', 'No se pudo aceptar la contraoferta. Intenta de nuevo.');
               }
             } else {
-              // Ask for counteroffer value
               const value = window.prompt('Escribe tu contraoferta (número):', String(originalTarifa || ''));
               if (value && !isNaN(Number(value))) {
                 try {
@@ -192,12 +194,10 @@ export default function SeguimientoScreen() {
                   Alert.alert('Error', 'No se pudo enviar la contraoferta. Intenta de nuevo.');
                 }
               } else {
-                // Treat as rejection
                 Alert.alert('Rechazado', 'Has rechazado la oferta. Puedes solicitar un nuevo servicio.');
               }
             }
           } else {
-            // RN Alert with buttons
             Alert.alert(title, message, [
               {
                 text: 'Aceptar',
@@ -216,7 +216,6 @@ export default function SeguimientoScreen() {
               {
                 text: 'Contraoferta',
                 onPress: async () => {
-                  // Fallback: navigate to chat so user can coordinate or implement a small modal later
                   setIsHandlingOffer(false);
                   router.push({ pathname: '/(cliente)/mensajes', params: { idServicio } });
                 },
@@ -231,7 +230,6 @@ export default function SeguimientoScreen() {
               },
             ]);
           }
-
         }
       } catch (err) {
         console.error('Error polling order:', err);
@@ -242,7 +240,7 @@ export default function SeguimientoScreen() {
       } finally {
         setIsPolling(false);
         const backoffMs = 5000 + pollingErrorCountRef.current * 2000;
-        if (mounted) pollingRef.current = window.setTimeout(poll, backoffMs);
+        if (mounted) pollingRef.current = setTimeout(poll, backoffMs);
       }
     };
 
@@ -253,6 +251,27 @@ export default function SeguimientoScreen() {
       if (pollingRef.current) clearTimeout(pollingRef.current);
     };
   }, [idServicio, latestOffer, isHandlingOffer, originalTarifa, router]);
+
+  useEffect(() => {
+    if (!idServicio) return;
+
+    let mounted = true;
+    const loadDriver = async () => {
+      try {
+        const info = await driverService.getDriverByOrder(Number(idServicio));
+        if (mounted) setDriverInfo(info);
+      } catch (err) {
+        // ignore if driver not assigned yet
+      }
+    };
+
+    loadDriver();
+    const refresh = setInterval(loadDriver, 15000);
+    return () => {
+      mounted = false;
+      clearInterval(refresh);
+    };
+  }, [idServicio]);
 
   useEffect(() => {
     if (!idServicio) return;
@@ -274,7 +293,7 @@ export default function SeguimientoScreen() {
       } catch (err) {
         // ignore polling errors, rely on ws
       } finally {
-        if (mounted) trackingPollRef.current = window.setTimeout(pollTracking, 15000);
+        if (mounted) trackingPollRef.current = setTimeout(pollTracking, 15000);
       }
     };
 
@@ -299,6 +318,57 @@ export default function SeguimientoScreen() {
       if (trackingPollRef.current) clearTimeout(trackingPollRef.current);
     };
   }, [idServicio]);
+
+  const currentStep = useMemo(() => {
+    const status = (orderStatus || '').toLowerCase();
+    if (status.includes('entreg')) return 3;
+    if (status.includes('camino')) return 2;
+    if (status.includes('acept')) return 1;
+    return 0;
+  }, [orderStatus]);
+
+  const statusBadge = useMemo(() => {
+    const status = (orderStatus || '').toLowerCase();
+    if (status.includes('entreg')) return 'Entregado';
+    if (status.includes('camino')) return 'En camino';
+    if (status.includes('acept')) return 'Aceptado';
+    if (status.includes('pend')) return 'Pendiente';
+    if (status.includes('cancel')) return 'Cancelado';
+    return 'Pendiente';
+  }, [orderStatus]);
+
+  const canCancel = useMemo(() => {
+    const status = (orderStatus || '').toLowerCase();
+    return status.includes('pend') || status.includes('acept');
+  }, [orderStatus]);
+
+  const handleCancelService = async () => {
+    if (!idServicio) {
+      Alert.alert('Error', 'ID de servicio no disponible');
+      return;
+    }
+
+    Alert.alert('Cancelar servicio', '¿Deseas cancelar este servicio?', [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Sí, cancelar',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await (await import('../../src/services/orderService')).orderService.updateOrderState(Number(idServicio), 'CANCELADO');
+            setOrderStatus('cancelado');
+            Alert.alert('Cancelado', 'El servicio fue cancelado.');
+          } catch (err: any) {
+            const msg =
+              (typeof err?.error === 'string' && err.error) ||
+              err?.error?.error ||
+              'No se pudo cancelar el servicio. Intenta de nuevo.';
+            Alert.alert('Error', msg);
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -336,30 +406,37 @@ export default function SeguimientoScreen() {
       <View style={styles.sheet}>
         <View style={styles.sheetHandle} />
 
+        <View style={styles.statusBadgeRow}>
+          <Text style={styles.statusBadgeLabel}>Estado del servicio</Text>
+          <View style={styles.statusBadgePill}>
+            <Text style={styles.statusBadgeText}>{statusBadge}</Text>
+          </View>
+        </View>
+
         <View style={styles.stepper}>
           <View style={styles.stepItem}>
-            <View style={[styles.stepCircle, statusConfig.isCreated ? styles.stepDone : styles.stepPending]}>
-              <Ionicons name="checkmark" size={13} color={statusConfig.isCreated ? '#0a0f1c' : '#6d6d6d'} />
+            <View style={[styles.stepCircle, currentStep >= 1 ? styles.stepDone : styles.stepPending]}>
+              <Ionicons name={currentStep >= 1 ? 'checkmark' : 'ellipse'} size={13} color={currentStep >= 1 ? '#0a0f1c' : '#6d6d6d'} />
             </View>
-            <Text style={statusConfig.isCreated ? styles.stepLabel : styles.stepLabelMuted}>Solicitud</Text>
+            <Text style={currentStep >= 1 ? styles.stepLabel : styles.stepLabelMuted}>Aceptado</Text>
           </View>
 
           <View style={styles.stepLine} />
 
           <View style={styles.stepItem}>
-            <View style={[styles.stepCircle, statusConfig.isAccepted ? styles.stepDone : styles.stepPending]}>
-              <MaterialCommunityIcons name="bicycle" size={14} color={statusConfig.isAccepted ? '#0a0f1c' : '#6d6d6d'} />
+            <View style={[styles.stepCircle, currentStep >= 2 ? styles.stepDone : styles.stepPending]}>
+              <MaterialCommunityIcons name="bicycle" size={14} color={currentStep >= 2 ? '#0a0f1c' : '#6d6d6d'} />
             </View>
-            <Text style={statusConfig.isAccepted ? styles.stepLabel : styles.stepLabelMuted}>Aceptado</Text>
+            <Text style={currentStep >= 2 ? styles.stepLabel : styles.stepLabelMuted}>En camino</Text>
           </View>
 
-          <View style={[styles.stepLine, statusConfig.isAccepted || statusConfig.isCompleted ? styles.stepLineActive : null]} />
+          <View style={[styles.stepLine, currentStep >= 2 ? styles.stepLineActive : undefined]} />
 
           <View style={styles.stepItem}>
-            <View style={[styles.stepCircle, statusConfig.isCompleted ? styles.stepDone : styles.stepPending]}>
-              <Ionicons name="checkmark" size={13} color={statusConfig.isCompleted ? '#0a0f1c' : '#6d6d6d'} />
+            <View style={[styles.stepCircle, currentStep >= 3 ? styles.stepDone : styles.stepPending]}>
+              <Ionicons name="checkmark" size={13} color={currentStep >= 3 ? '#0a0f1c' : '#6d6d6d'} />
             </View>
-            <Text style={statusConfig.isCompleted ? styles.stepLabel : styles.stepLabelMuted}>Entregado</Text>
+            <Text style={currentStep >= 3 ? styles.stepLabel : styles.stepLabelMuted}>Entregado</Text>
           </View>
         </View>
 
@@ -491,6 +568,13 @@ export default function SeguimientoScreen() {
           </TouchableOpacity>
         </View>
 
+        {canCancel && (
+          <TouchableOpacity style={styles.cancelButton} onPress={handleCancelService}>
+            <Ionicons name="close-circle" size={18} color="#ff8b8b" />
+            <Text style={styles.cancelButtonText}>Cancelar servicio</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={styles.rateButton}
           onPress={() => {
@@ -498,8 +582,8 @@ export default function SeguimientoScreen() {
               Alert.alert('Error', 'ID de servicio no disponible');
               return;
             }
-            if (!statusConfig.isCompleted) {
-              Alert.alert('Aun no', 'Podras calificar cuando el servicio este completado.');
+            if (!statusConfig.isEntregado) {
+              Alert.alert('Aun no', 'Podras calificar cuando el servicio este entregado.');
               return;
             }
             setShowRatingModal(true);
@@ -593,6 +677,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#444',
     alignSelf: 'center',
     marginBottom: 12,
+  },
+  statusBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  statusBadgeLabel: {
+    color: '#9a9a9a',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusBadgePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(23, 213, 170, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(23, 213, 170, 0.35)',
+  },
+  statusBadgeText: {
+    color: THEME.primary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   stepper: {
     flexDirection: 'row',
@@ -761,6 +869,24 @@ const styles = StyleSheet.create({
     color: THEME.background,
     fontSize: 16,
     fontWeight: '600',
+  },
+  cancelButton: {
+    marginTop: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 82, 82, 0.35)',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 82, 82, 0.08)',
+  },
+  cancelButtonText: {
+    color: '#ff8b8b',
+    fontSize: 14,
+    fontWeight: '700',
   },
   statusCard: {
     backgroundColor: '#151515',

@@ -69,13 +69,15 @@ export default function DomiciliarioMapScreen() {
       const visibleOrders = pendingOrderStore.filterVisible(orders);
       setPendingOrders(visibleOrders);
 
-      const acceptedOrder = visibleOrders.find((order) => (order.estado || '').toUpperCase() === 'ACEPTADO');
+      const acceptedOrder = visibleOrders.find((order) => {
+        const estado = (order.estado || '').toUpperCase();
+        return estado === 'ACEPTADO' || estado === 'EN_CAMINO';
+      });
       setActiveOrderId(acceptedOrder?.id ?? null);
       latestActiveServiceIdRef.current = acceptedOrder?.id ?? null;
     } catch (error: any) {
       console.error('Error obteniendo órdenes:', error);
 
-      // Si es 403 => token inválido o domiciliario no verificado/disponible
       if (error?.status === 403) {
         Alert.alert(
           'No autorizado',
@@ -91,7 +93,6 @@ export default function DomiciliarioMapScreen() {
         return;
       }
 
-      // Sin status: problema de red / backend no disponible
       if (!error?.status) {
         Alert.alert(
           'Error de conexión',
@@ -106,8 +107,6 @@ export default function DomiciliarioMapScreen() {
         setPendingOrders([]);
         return;
       }
-
-      // Otros errores: limpiar bandeja y seguir
     }
   }, [isActive]);
 
@@ -170,13 +169,10 @@ export default function DomiciliarioMapScreen() {
     })();
   }, [isActive, activeOrderId]);
 
-  // Polling de órdenes asignadas
   useFocusEffect(
     useCallback(() => {
-      // Fetch inmediato
       void fetchAssignedOrders();
 
-      // Polling cada 5 segundos
       pollingIntervalRef.current = setInterval(() => {
         void fetchAssignedOrders();
       }, 5000);
@@ -250,7 +246,6 @@ export default function DomiciliarioMapScreen() {
         clientId: request.id_cliente ? String(request.id_cliente) : undefined,
         originAddress: request.direccion_origen || 'Origen',
         destinationAddress: request.direccion_destino || 'Destino',
-        // prefer tarifa (DB field) when present
         fare: `$${request.tarifa ?? request.precio ?? 0}`,
         distance: request.tiempo_estimado ? `~${request.tiempo_estimado} min` : 'Pendiente',
         originLat: request.lat_origen ? String(request.lat_origen) : undefined,
@@ -286,7 +281,6 @@ export default function DomiciliarioMapScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Mapa */}
       <MapView
         style={styles.map}
         customMapStyle={CUSTOM_MAP_STYLE}
@@ -301,7 +295,6 @@ export default function DomiciliarioMapScreen() {
             : undefined
         }
       >
-        {/* Marcador del domiciliario */}
         {location && (
           <Marker
             coordinate={{
@@ -317,7 +310,6 @@ export default function DomiciliarioMapScreen() {
         )}
       </MapView>
 
-      {/* Header con perfil y toggle */}
       <View style={styles.header}>
         <View style={styles.profileContainer}>
           <View style={styles.avatar}>
@@ -346,7 +338,6 @@ export default function DomiciliarioMapScreen() {
         </View>
       </View>
 
-      {/* Bandeja de pedidos */}
       <View style={styles.requestTray}>
         {activeOrders.length > 0 && (
           <View style={styles.activeTray}>
@@ -413,7 +404,6 @@ export default function DomiciliarioMapScreen() {
         )}
       </View>
 
-      {/* Stats cards */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>4.9</Text>
@@ -429,7 +419,6 @@ export default function DomiciliarioMapScreen() {
         </View>
       </View>
 
-      {/* Estado */}
       <View style={styles.statusBar}>
         <Text style={styles.statusLabel}>Estado</Text>
         <Text style={styles.statusMessage}>Esperando solicitudes...</Text>

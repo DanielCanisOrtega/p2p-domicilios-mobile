@@ -52,17 +52,19 @@ api.interceptors.request.use(
     } catch (error) {
       console.error("Error al obtener token:", error);
     }
-    // Debug outgoing payloads in development
-    try {
-      if (config && config.url && config.method && config.data) {
+      // Debug outgoing payloads in development
+      try {
         const fullUrl = `${config.baseURL}${config.url}`;
-        if (fullUrl.includes('/api/orders/create')) {
-          console.debug('[api] Request to create order ->', { method: config.method, url: fullUrl, data: config.data });
+        // Log token presence and headers for troubleshooting CORS / auth issues
+        console.debug('[api] outgoing request', { method: config.method, url: fullUrl, tokenPresent: !!(await AsyncStorage.getItem(TOKEN_KEY)), headers: config.headers });
+        if (config && config.url && config.method && config.data) {
+          if (fullUrl.includes('/api/orders/create')) {
+            console.debug('[api] Request to create order ->', { method: config.method, url: fullUrl, data: config.data });
+          }
         }
+      } catch (err) {
+        // ignore logging errors
       }
-    } catch (err) {
-      // ignore logging errors
-    }
     return config;
   },
   (error) => {

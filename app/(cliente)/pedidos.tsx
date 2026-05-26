@@ -5,19 +5,19 @@ import { ActivityIndicator, RefreshControl, SafeAreaView, ScrollView, StyleSheet
 import { orderService, type Order } from '../../src/services/orderService';
 
 const STATUS_LABELS: Record<string, string> = {
-  CREADO: 'Solicitud enviada',
-  OFERTA_EN_CURSO: 'Contraoferta en curso',
+  PENDIENTE: 'Solicitud enviada',
   ACEPTADO: 'Aceptado',
-  COMPLETADO: 'Completado',
-  RECHAZADO: 'Rechazado',
+  EN_CAMINO: 'En camino',
+  ENTREGADO: 'Entregado',
+  CANCELADO: 'Cancelado',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  CREADO: '#8fd6ff',
-  OFERTA_EN_CURSO: '#f4b400',
+  PENDIENTE: '#8fd6ff',
   ACEPTADO: '#17d5aa',
-  COMPLETADO: '#7bd85a',
-  RECHAZADO: '#ff5a5f',
+  EN_CAMINO: '#f4b400',
+  ENTREGADO: '#7bd85a',
+  CANCELADO: '#ff5a5f',
 };
 
 const formatDate = (value?: string) => {
@@ -27,11 +27,11 @@ const formatDate = (value?: string) => {
   return parsed.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
 
-const normalizeStatus = (estado?: string) => (estado || 'CREADO').toUpperCase();
+const normalizeStatus = (estado?: string) => (estado || 'PENDIENTE').toUpperCase();
 
 const isActiveStatus = (estado?: string) => {
   const status = normalizeStatus(estado);
-  return status === 'CREADO' || status === 'OFERTA_EN_CURSO' || status === 'ACEPTADO';
+  return status === 'PENDIENTE' || status === 'ACEPTADO' || status === 'EN_CAMINO';
 };
 
 export default function PedidosCliente() {
@@ -74,11 +74,11 @@ export default function PedidosCliente() {
     const poll = async () => {
       if (!mounted) return;
       await loadOrders();
-      if (mounted) pollingRef.current = window.setTimeout(poll, 12000);
+      if (mounted) pollingRef.current = setTimeout(poll, 12000);
     };
 
     void loadOrders();
-    pollingRef.current = window.setTimeout(poll, 12000);
+    pollingRef.current = setTimeout(poll, 12000);
 
     return () => {
       mounted = false;
@@ -147,7 +147,8 @@ export default function PedidosCliente() {
                   </View>
                   <View style={[styles.statusPill, { borderColor: STATUS_COLORS[normalizeStatus(activeOrder.estado)] }]}
                   >
-                    <Text style={[styles.statusPillText, { color: STATUS_COLORS[normalizeStatus(activeOrder.estado)] }]}>
+                    <Text style={[styles.statusPillText, { color: STATUS_COLORS[normalizeStatus(activeOrder.estado)] }]}
+                    >
                       {STATUS_LABELS[normalizeStatus(activeOrder.estado)]}
                     </Text>
                   </View>

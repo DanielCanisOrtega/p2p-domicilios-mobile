@@ -52,6 +52,20 @@ export interface DriverActiveOrder {
   fechaSolicitud?: string;
 }
 
+export interface DriverDetail {
+  id: number;
+  nombre?: string;
+  email?: string;
+  latitud?: number;
+  longitud?: number;
+  disponible?: boolean;
+  verificado?: boolean;
+  vehiculo?: string;
+  placa?: string;
+  calificacion?: number;
+  distancia?: number;
+}
+
 export const driverService = {
   async getNearbyDrivers(
     latitude: number,
@@ -142,6 +156,21 @@ export const driverService = {
       throw {
         status,
         message: backendMessage || "Error obteniendo servicios activos",
+      };
+    }
+  },
+
+  async getDriverByOrder(idServicio: number): Promise<DriverDetail> {
+    try {
+      const response = await api.get<DriverDetail>(`${BASE_URL}/drivers/orders/${idServicio}/driver`);
+      return response.data;
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const backendMessage = error?.response?.data?.message || error?.response?.data?.error;
+
+      throw {
+        status,
+        message: backendMessage || "Error obteniendo domiciliario del servicio",
       };
     }
   },

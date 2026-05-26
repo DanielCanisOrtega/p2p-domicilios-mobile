@@ -218,7 +218,7 @@ export default function ConfirmarPedido() {
         tarifa: Number(estimatedFare),
         tiempo_estimado: estimatedMinutes,
         descripcion: descripcion,
-        estado: 'CREADO'
+        estado: 'PENDIENTE'
       };
       // Final debug log: exact JSON body that will be sent to backend
       try {

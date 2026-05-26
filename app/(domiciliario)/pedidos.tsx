@@ -8,7 +8,6 @@ import { orderService } from '../../src/services/orderService';
 import { pendingOrderStore } from '../../src/services/pendingOrderStore';
 import RatingModal from '../../src/components/rating/RatingModal';
 
-// 🎨 Paleta de colores Premium Dark
 const THEME = {
   background: '#0a0f1c',
   panel: '#12151c',
@@ -24,7 +23,7 @@ const THEME = {
 export default function DetallePedidoDomiciliario() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  
+
   const orderId = Number(params.orderId);
   const clientName = String(params.clientName || 'Cliente');
   const clientRating = String(params.clientRating || '4.5');
@@ -33,9 +32,9 @@ export default function DetallePedidoDomiciliario() {
   const destinationAddress = String(params.destinationAddress || 'Destino desconocido');
   const fare = String(params.fare || '$0');
   const distance = String(params.distance || '0m');
-  
+
   const [isLoading, setIsLoading] = useState(false);
-  const [pedidoEstado, setPedidoEstado] = useState<'pendiente' | 'aceptado' | 'rechazado' | 'finalizado'>('pendiente');
+  const [pedidoEstado, setPedidoEstado] = useState<'pendiente' | 'aceptado' | 'en_camino' | 'entregado' | 'cancelado'>('pendiente');
   const [showCounterOfferModal, setShowCounterOfferModal] = useState(false);
   const [counterOfferPrice, setCounterOfferPrice] = useState('');
   const [latestObservedOffer, setLatestObservedOffer] = useState<number | null>(null);
@@ -51,7 +50,40 @@ export default function DetallePedidoDomiciliario() {
     setIsLoading(false);
   }, [orderId]);
 
-  // Poll order to detect client's counteroffers (oferta_actual changes)
+  useEffect(() => {
+    let mounted = true;
+    const syncStatus = async () => {
+      if (!orderId) return;
+      try {
+        const order = await orderService.getOrderById(orderId);
+        const estado = (order.estado || '').toString().toLowerCase();
+        if (!mounted || !estado) return;
+        if (estado.includes('pendiente')) setPedidoEstado('pendiente');
+        else if (estado.includes('acept')) setPedidoEstado('aceptado');
+        else if (estado.includes('camino')) setPedidoEstado('en_camino');
+        else if (estado.includes('entreg')) setPedidoEstado('entregado');
+        else if (estado.includes('cancel')) setPedidoEstado('cancelado');
+
+        const oferta = order.oferta_actual ?? order.tarifa ?? order.precio ?? null;
+        const ofertaNum = oferta ? Number(oferta) : null;
+        const offerBy = (order.ultima_oferta_por || '').toString().trim().toUpperCase();
+
+        if (mounted && ofertaNum && ofertaNum !== latestObservedOffer && offerBy === 'CLIENTE') {
+          setLatestObservedOffer(ofertaNum);
+          setClientOfferValue(ofertaNum);
+          setShowClientOfferModal(true);
+        }
+      } catch (err) {
+        // ignore status sync errors
+      }
+    };
+
+    syncStatus();
+    return () => {
+      mounted = false;
+    };
+  }, [orderId, latestObservedOffer]);
+
   useEffect(() => {
     let mounted = true;
     const poll = async () => {
@@ -60,10 +92,8 @@ export default function DetallePedidoDomiciliario() {
         const order = await orderService.getOrderById(orderId);
         const oferta = order.oferta_actual ?? order.tarifa ?? order.precio ?? null;
         const ofertaNum = oferta ? Number(oferta) : null;
-        const offerBy = (order.ultima_oferta_por || '').toString().trim().toUpperCase();
 
-        if (mounted && ofertaNum && ofertaNum !== latestObservedOffer && offerBy === 'CLIENTE') {
-          // New offer detected — show modal to driver
+        if (mounted && ofertaNum && ofertaNum !== latestObservedOffer) {
           setLatestObservedOffer(ofertaNum);
           setClientOfferValue(ofertaNum);
           setShowClientOfferModal(true);
@@ -71,7 +101,7 @@ export default function DetallePedidoDomiciliario() {
       } catch (err) {
         console.error('Error polling order for client offers:', err);
       } finally {
-        if (mounted) pollingRef.current = window.setTimeout(poll, 4000);
+        if (mounted) pollingRef.current = setTimeout(poll, 4000);
       }
     };
 
@@ -156,7 +186,7 @@ export default function DetallePedidoDomiciliario() {
       await orderService.rejectOrder(orderId);
       pendingOrderStore.dismiss(orderId);
       pendingOrderStore.forgetActive(orderId);
-      setPedidoEstado('rechazado');
+      setPedidoEstado('cancelado');
       Alert.alert('Pedido rechazado', 'La solicitud fue rechazada y ya no aparecerá en pendientes', [
         {
           text: 'OK',
@@ -274,13 +304,52 @@ export default function DetallePedidoDomiciliario() {
     }
   };
 
-  const handleTerminarServicio = () => {
+  const handleEnCamino = async () => {
+    if (!orderId) {
+      Alert.alert('Error', 'No se pudo identificar el pedido');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const latest = await orderService.getOrderById(orderId);
+      const estado = (latest.estado || '').toString().toUpperCase();
+      if (estado === 'PENDIENTE') {
+        await orderService.acceptOrder(orderId);
+      }
+      await orderService.updateOrderState(orderId, 'EN_CAMINO');
+      pendingOrderStore.rememberActive(orderId);
+      setPedidoEstado('en_camino');
+      Alert.alert('Estado actualizado', 'Marcaste el servicio como en camino');
+    } catch (error: any) {
+      const msg =
+        (typeof error?.error === 'string' && error.error) ||
+        error?.error?.error ||
+        'No se pudo actualizar el estado. Intenta de nuevo.';
+      Alert.alert('Error', msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEntregado = () => {
     if (Platform.OS === 'web') {
       const ok = typeof window !== 'undefined' ? window.confirm('¿Confirmas que el servicio fue completado?') : true;
       if (!ok) return;
-      setPedidoEstado('finalizado');
-      pendingOrderStore.forgetActive(orderId);
-      setShowRatingModal(true);
+      void (async () => {
+        if (!orderId) return;
+        try {
+          await orderService.updateOrderState(orderId, 'ENTREGADO');
+          setPedidoEstado('entregado');
+          setShowRatingModal(true);
+        } catch (error: any) {
+          const msg =
+            (typeof error?.error === 'string' && error.error) ||
+            error?.error?.error ||
+            'No se pudo actualizar el estado. Intenta de nuevo.';
+          Alert.alert('Error', msg);
+        }
+      })();
       return;
     }
 
@@ -288,17 +357,28 @@ export default function DetallePedidoDomiciliario() {
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Terminar',
-        onPress: () => {
-          setPedidoEstado('finalizado');
-          pendingOrderStore.forgetActive(orderId);
-          setShowRatingModal(true);
+        onPress: async () => {
+          if (!orderId) return;
+          setIsLoading(true);
+          try {
+            await orderService.updateOrderState(orderId, 'ENTREGADO');
+            setPedidoEstado('entregado');
+            setShowRatingModal(true);
+          } catch (error: any) {
+            const msg =
+              (typeof error?.error === 'string' && error.error) ||
+              error?.error?.error ||
+              'No se pudo actualizar el estado. Intenta de nuevo.';
+            Alert.alert('Error', msg);
+          } finally {
+            setIsLoading(false);
+          }
         },
       },
     ]);
   };
 
-  // Si el servicio está finalizado, mostrar solo la pantalla de completado
-  if (pedidoEstado === 'finalizado') {
+  if (pedidoEstado === 'entregado') {
     return (
       <>
         <ServicioCompletadoScreen
@@ -332,8 +412,7 @@ export default function DetallePedidoDomiciliario() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-        
-        {/* MAPA COMPARTIDO */}
+
         <View style={styles.mapArea}>
           <MapView
             style={styles.map}
@@ -363,47 +442,63 @@ export default function DetallePedidoDomiciliario() {
           </TouchableOpacity>
         </View>
 
-        {/* 📄 PANEL INFERIOR */}
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Detalles del servicio</Text>
 
-          {(pedidoEstado === 'aceptado' || pedidoEstado === 'rechazado') && (
+          {(pedidoEstado === 'aceptado' || pedidoEstado === 'en_camino' || pedidoEstado === 'cancelado') && (
             <View
               style={[
                 styles.statusCard,
-                pedidoEstado === 'aceptado' ? styles.statusCardAccepted : styles.statusCardRejected,
+                pedidoEstado === 'aceptado' || pedidoEstado === 'en_camino'
+                  ? styles.statusCardAccepted
+                  : styles.statusCardRejected,
               ]}
             >
               <View style={styles.statusRow}>
                 <View
                   style={[
                     styles.statusIcon,
-                    pedidoEstado === 'aceptado' ? styles.statusIconAccepted : styles.statusIconRejected,
+                    pedidoEstado === 'aceptado' || pedidoEstado === 'en_camino'
+                      ? styles.statusIconAccepted
+                      : styles.statusIconRejected,
                   ]}
                 >
                   <Ionicons
-                    name={pedidoEstado === 'aceptado' ? 'checkmark' : 'close'}
+                    name={pedidoEstado === 'aceptado' || pedidoEstado === 'en_camino' ? 'checkmark' : 'close'}
                     size={18}
-                    color={pedidoEstado === 'aceptado' ? '#0a0f1c' : '#fff'}
+                    color={pedidoEstado === 'aceptado' || pedidoEstado === 'en_camino' ? '#0a0f1c' : '#fff'}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.statusTitle}>
-                    {pedidoEstado === 'aceptado' ? 'Pedido aceptado' : 'Pedido rechazado'}
+                    {pedidoEstado === 'aceptado'
+                      ? 'Pedido aceptado'
+                      : pedidoEstado === 'en_camino'
+                        ? 'En camino'
+                        : 'Pedido cancelado'}
                   </Text>
                   <Text style={styles.statusText}>
                     {pedidoEstado === 'aceptado'
-                      ? 'La solicitud quedó tomada por ti y sigue en esta misma pantalla.'
-                      : 'La solicitud fue rechazada y ya no aparecerá en pendientes.'}
+                      ? 'La solicitud quedó tomada por ti. Puedes iniciar el recorrido.'
+                      : pedidoEstado === 'en_camino'
+                        ? 'Te diriges al destino. Actualiza cuando entregues.'
+                        : 'La solicitud fue cancelada y ya no aparecerá en pendientes.'}
                   </Text>
                 </View>
               </View>
 
-              {pedidoEstado === 'aceptado' && (
+              {(pedidoEstado === 'aceptado' || pedidoEstado === 'en_camino') && (
                 <View style={styles.acceptedActionsRow}>
-                  <TouchableOpacity style={styles.finishServiceBtn} onPress={handleTerminarServicio}>
-                    <Text style={styles.finishServiceText}>Terminar servicio</Text>
-                  </TouchableOpacity>
+                  {pedidoEstado === 'aceptado' && (
+                    <TouchableOpacity style={styles.finishServiceBtn} onPress={handleEnCamino} disabled={isLoading}>
+                      <Text style={styles.finishServiceText}>Iniciar recorrido</Text>
+                    </TouchableOpacity>
+                  )}
+                  {pedidoEstado === 'en_camino' && (
+                    <TouchableOpacity style={styles.finishServiceBtn} onPress={handleEntregado} disabled={isLoading}>
+                      <Text style={styles.finishServiceText}>Marcar entregado</Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity style={styles.statusActionBtn} onPress={() => router.replace('/(domiciliario)/mapa')}>
                     <Text style={styles.statusActionText}>Volver al mapa</Text>
                   </TouchableOpacity>
@@ -412,8 +507,9 @@ export default function DetallePedidoDomiciliario() {
             </View>
           )}
 
-          {/* TARJETA DEL CLIENTE */}
-          <View style={styles.clientCard}>
+          {pedidoEstado !== 'entregado' && (
+            <>
+              <View style={styles.clientCard}>
                 <View style={styles.clientAvatar}>
                   <Text style={{ fontSize: 24 }}>👤</Text>
                 </View>
@@ -424,10 +520,9 @@ export default function DetallePedidoDomiciliario() {
                     <Text style={styles.ratingText}>{clientRating} · {clientServices} servicios</Text>
                   </View>
                 </View>
-          </View>
+              </View>
 
-          {/* TARJETA DE DIRECCIONES */}
-          <View style={styles.addressCard}>
+              <View style={styles.addressCard}>
                 <View style={styles.addressRow}>
                   <View style={[styles.dot, { backgroundColor: THEME.primary }]} />
                   <View>
@@ -445,10 +540,9 @@ export default function DetallePedidoDomiciliario() {
                     <Text style={styles.addrValue}>{destinationAddress}</Text>
                   </View>
                 </View>
-          </View>
+              </View>
 
-          {/* CAJAS DE TARIFA Y DISTANCIA */}
-          <View style={styles.statsRow}>
+              <View style={styles.statsRow}>
                 <View style={styles.tarifaBox}>
                   <Text style={styles.statLabel}>TARIFA</Text>
                   <Text style={styles.tarifaValue}>{fare}</Text>
@@ -458,155 +552,151 @@ export default function DetallePedidoDomiciliario() {
                   <Text style={styles.statLabel}>DISTANCIA AL ORIGEN</Text>
                   <Text style={styles.distanciaValue}>{distance}</Text>
                 </View>
-          </View>
-
-          {/* BOTONES DE RECHAZAR, CONTRAOFERTA Y ACEPTAR */}
-          {pedidoEstado === 'pendiente' && (
-            <>
-              <View style={styles.actionsRow}>
-                <TouchableOpacity
-                  style={[styles.btnRechazar, isLoading && styles.buttonDisabled]}
-                  onPress={handleRechazar}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color={THEME.dangerText} size="small" />
-                  ) : (
-                    <Text style={styles.textRechazar}>Rechazar</Text>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.btnContraoferta, isLoading && styles.buttonDisabled]}
-                  onPress={() => setShowCounterOfferModal(true)}
-                  disabled={isLoading}
-                >
-                  <Text style={styles.textContraoferta}>Contraoferta</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.btnAceptar, isLoading && styles.buttonDisabled]}
-                  onPress={handleAceptar}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color="#0a0f1c" size="small" />
-                  ) : (
-                    <Text style={styles.textAceptar}>Aceptar</Text>
-                  )}
-                </TouchableOpacity>
               </View>
 
-              {/* MODAL DE CONTRAOFERTA */}
-              <Modal
-                visible={showCounterOfferModal}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => {
-                  setShowCounterOfferModal(false);
-                  setCounterOfferPrice('');
-                }}
-              >
-                <View style={styles.modalOverlay}>
-                  <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>Hacer Contraoferta</Text>
-                    <Text style={styles.modalSubtitle}>Tarifa actual: {fare}</Text>
+              {pedidoEstado === 'pendiente' && (
+                <>
+                  <View style={styles.actionsRow}>
+                    <TouchableOpacity
+                      style={[styles.btnRechazar, isLoading && styles.buttonDisabled]}
+                      onPress={handleRechazar}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator color={THEME.dangerText} size="small" />
+                      ) : (
+                        <Text style={styles.textRechazar}>Rechazar</Text>
+                      )}
+                    </TouchableOpacity>
 
-                    <TextInput
-                      style={styles.priceInput}
-                      placeholder="Ingresa tu precio"
-                      placeholderTextColor={THEME.textSecondary}
-                      keyboardType="decimal-pad"
-                      value={counterOfferPrice}
-                      onChangeText={setCounterOfferPrice}
-                      editable={!isLoading}
-                    />
+                    <TouchableOpacity
+                      style={[styles.btnContraoferta, isLoading && styles.buttonDisabled]}
+                      onPress={() => setShowCounterOfferModal(true)}
+                      disabled={isLoading}
+                    >
+                      <Text style={styles.textContraoferta}>Contraoferta</Text>
+                    </TouchableOpacity>
 
-                    <View style={styles.modalButtonsRow}>
-                      <TouchableOpacity
-                        style={[styles.btnCancel, isLoading && styles.buttonDisabled]}
-                        onPress={() => {
-                          setShowCounterOfferModal(false);
-                          setCounterOfferPrice('');
-                        }}
-                        disabled={isLoading}
-                      >
-                        <Text style={styles.textCancel}>Cancelar</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.btnSendOffer, isLoading && styles.buttonDisabled]}
-                        onPress={handleContraoferta}
-                        disabled={isLoading || !counterOfferPrice}
-                      >
-                        {isLoading ? (
-                          <ActivityIndicator color="#fff" size="small" />
-                        ) : (
-                          <Text style={styles.textSendOffer}>Enviar Contraoferta</Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity
+                      style={[styles.btnAceptar, isLoading && styles.buttonDisabled]}
+                      onPress={handleAceptar}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator color="#0a0f1c" size="small" />
+                      ) : (
+                        <Text style={styles.textAceptar}>Aceptar</Text>
+                      )}
+                    </TouchableOpacity>
                   </View>
-                </View>
-              </Modal>
-              
-              {/* MODAL: Oferta enviada por el CLIENTE (visible al domiciliario) */}
-              <Modal
-                visible={showClientOfferModal}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => {
-                  setShowClientOfferModal(false);
-                }}
-              >
-                <View style={styles.modalOverlay}>
-                  <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>Nueva oferta del cliente</Text>
-                    <Text style={styles.modalSubtitle}>El cliente propone: {clientOfferValue ?? '—'}</Text>
 
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 }}>
-                      <TouchableOpacity
-                        style={[styles.btnAcceptOffer, isLoading && styles.buttonDisabled]}
-                        onPress={async () => {
-                          // Aceptar la oferta del cliente — continuar flujo como si aceptaras el pedido
-                          setShowClientOfferModal(false);
-                          await ejecutarAceptar();
-                        }}
-                        disabled={isLoading}
-                      >
-                        <Text style={styles.textAcceptOffer}>Aceptar</Text>
-                      </TouchableOpacity>
+                  <Modal
+                    visible={showCounterOfferModal}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => {
+                      setShowCounterOfferModal(false);
+                      setCounterOfferPrice('');
+                    }}
+                  >
+                    <View style={styles.modalOverlay}>
+                      <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Hacer Contraoferta</Text>
+                        <Text style={styles.modalSubtitle}>Tarifa actual: {fare}</Text>
 
-                      <TouchableOpacity
-                        style={[styles.btnCounterFromClient, isLoading && styles.buttonDisabled]}
-                        onPress={() => {
-                          // Abrir modal de contraoferta y prefill con la oferta del cliente
-                          setShowClientOfferModal(false);
-                          setCounterOfferPrice(String(clientOfferValue ?? ''));
-                          setShowCounterOfferModal(true);
-                        }}
-                        disabled={isLoading}
-                      >
-                        <Text style={styles.textCounterFromClient}>Contraoferta</Text>
-                      </TouchableOpacity>
+                        <TextInput
+                          style={styles.priceInput}
+                          placeholder="Ingresa tu precio"
+                          placeholderTextColor={THEME.textSecondary}
+                          keyboardType="decimal-pad"
+                          value={counterOfferPrice}
+                          onChangeText={setCounterOfferPrice}
+                          editable={!isLoading}
+                        />
 
-                      <TouchableOpacity
-                        style={[styles.btnRejectOffer, isLoading && styles.buttonDisabled]}
-                        onPress={async () => {
-                          setShowClientOfferModal(false);
-                          await ejecutarRechazar();
-                        }}
-                        disabled={isLoading}
-                      >
-                        <Text style={styles.textRejectOffer}>Rechazar</Text>
-                      </TouchableOpacity>
+                        <View style={styles.modalButtonsRow}>
+                          <TouchableOpacity
+                            style={[styles.btnCancel, isLoading && styles.buttonDisabled]}
+                            onPress={() => {
+                              setShowCounterOfferModal(false);
+                              setCounterOfferPrice('');
+                            }}
+                            disabled={isLoading}
+                          >
+                            <Text style={styles.textCancel}>Cancelar</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.btnSendOffer, isLoading && styles.buttonDisabled]}
+                            onPress={handleContraoferta}
+                            disabled={isLoading || !counterOfferPrice}
+                          >
+                            {isLoading ? (
+                              <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                              <Text style={styles.textSendOffer}>Enviar Contraoferta</Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
                     </View>
-                  </View>
-                </View>
-              </Modal>
+                  </Modal>
+
+                  <Modal
+                    visible={showClientOfferModal}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => {
+                      setShowClientOfferModal(false);
+                    }}
+                  >
+                    <View style={styles.modalOverlay}>
+                      <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Nueva oferta del cliente</Text>
+                        <Text style={styles.modalSubtitle}>El cliente propone: {clientOfferValue ?? '—'}</Text>
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 }}>
+                          <TouchableOpacity
+                            style={[styles.btnAcceptOffer, isLoading && styles.buttonDisabled]}
+                            onPress={async () => {
+                              setShowClientOfferModal(false);
+                              await ejecutarAceptar();
+                            }}
+                            disabled={isLoading}
+                          >
+                            <Text style={styles.textAcceptOffer}>Aceptar</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.btnCounterFromClient, isLoading && styles.buttonDisabled]}
+                            onPress={() => {
+                              setShowClientOfferModal(false);
+                              setCounterOfferPrice(String(clientOfferValue ?? ''));
+                              setShowCounterOfferModal(true);
+                            }}
+                            disabled={isLoading}
+                          >
+                            <Text style={styles.textCounterFromClient}>Contraoferta</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.btnRejectOffer, isLoading && styles.buttonDisabled]}
+                            onPress={async () => {
+                              setShowClientOfferModal(false);
+                              await ejecutarRechazar();
+                            }}
+                            disabled={isLoading}
+                          >
+                            <Text style={styles.textRejectOffer}>Rechazar</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  </Modal>
+                </>
+              )}
             </>
           )}
-
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -615,44 +705,32 @@ export default function DetallePedidoDomiciliario() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: THEME.background },
-  
-  // MAPA
   mapArea: { height: 380, backgroundColor: '#131b2f', overflow: 'hidden' },
   map: { flex: 1 },
   backBtn: { position: 'absolute', top: 50, left: 20, zIndex: 10, width: 40, height: 40, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
   markerA: { width: 28, height: 28, borderRadius: 14, backgroundColor: THEME.primary, alignItems: 'center', justifyContent: 'center' },
   markerB: { width: 28, height: 28, borderRadius: 14, backgroundColor: THEME.accent, alignItems: 'center', justifyContent: 'center' },
   markerText: { color: '#0a0f1c', fontSize: 12, fontWeight: 'bold' },
-
-  // PANEL
   panel: { backgroundColor: THEME.background, padding: 20, marginTop: -20 },
   panelTitle: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
-
-  // CARD CLIENTE
   clientCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111720', borderRadius: 12, padding: 15, marginBottom: 15, borderWidth: 1, borderColor: '#174033' },
   clientAvatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderColor: THEME.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a0f1c' },
   clientInfo: { marginLeft: 15 },
   clientName: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   ratingRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   ratingText: { color: THEME.textSecondary, fontSize: 13, marginLeft: 5 },
-
-  // CARD DIRECCIONES
   addressCard: { backgroundColor: '#171a22', borderRadius: 12, padding: 18, marginBottom: 20 },
   addressRow: { flexDirection: 'row', alignItems: 'center' },
   dot: { width: 12, height: 12, borderRadius: 6, marginRight: 15 },
   addrLabel: { color: THEME.textSecondary, fontSize: 10, fontWeight: 'bold', marginBottom: 3 },
   addrValue: { color: '#fff', fontSize: 16 },
   divider: { height: 1, backgroundColor: THEME.divider, marginVertical: 15, marginLeft: 27 },
-
-  // ESTADISTICAS
   statsRow: { flexDirection: 'row', gap: 15, marginBottom: 30 },
   tarifaBox: { flex: 1, backgroundColor: '#0e241c', padding: 15, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   tarifaValue: { color: THEME.primary, fontSize: 24, fontWeight: 'bold', marginTop: 5 },
   distanciaBox: { flex: 1, backgroundColor: '#1a1b26', padding: 15, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   distanciaValue: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginTop: 5 },
   statLabel: { color: THEME.textSecondary, fontSize: 10, fontWeight: 'bold' },
-
-  // BOTONES
   actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   btnRechazar: { flex: 1, backgroundColor: THEME.dangerBg, paddingVertical: 16, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   textRechazar: { color: THEME.dangerText, fontSize: 14, fontWeight: 'bold' },
@@ -661,8 +739,6 @@ const styles = StyleSheet.create({
   btnAceptar: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 16, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   textAceptar: { color: '#0a0f1c', fontSize: 14, fontWeight: 'bold' },
   buttonDisabled: { opacity: 0.6 },
-
-  // MODAL
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.8)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: THEME.panel, borderRadius: 15, padding: 24, width: '85%', maxWidth: 400 },
   modalTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold', marginBottom: 8 },
@@ -689,8 +765,6 @@ const styles = StyleSheet.create({
   textCounterFromClient: { color: '#0a0f1c', fontSize: 13, fontWeight: 'bold' },
   btnRejectOffer: { flex: 1, backgroundColor: THEME.dangerBg, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   textRejectOffer: { color: THEME.dangerText, fontSize: 13, fontWeight: 'bold' },
-
-  // ESTADO PEDIDO
   statusCard: { borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1 },
   statusCardAccepted: { backgroundColor: '#0e241c', borderColor: '#1d5d47' },
   statusCardRejected: { backgroundColor: '#241113', borderColor: '#5b262b' },

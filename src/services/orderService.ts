@@ -58,12 +58,11 @@ export const normalizeOrder = (raw: any): Order => {
       raw?.direccion_origen ?? raw?.direccionOrigen ?? raw?.origen ?? raw?.pickupAddress ?? 'Origen',
     direccion_destino:
       raw?.direccion_destino ?? raw?.direccionDestino ?? raw?.destino ?? raw?.dropoffAddress ?? 'Destino',
-    estado: raw?.estado ?? raw?.status ?? 'CREADO',
+    estado: raw?.estado ?? raw?.status ?? 'PENDIENTE',
     descripcion: raw?.descripcion ?? raw?.detalle ?? raw?.observacion ?? '',
     tarifa: Number(raw?.tarifa ?? raw?.tarifa_actual ?? raw?.tarifaActual ?? raw?.monto ?? raw?.precio ?? 0) || undefined,
     oferta_actual: Number(raw?.oferta_actual ?? raw?.ofertaActual ?? raw?.oferta ?? 0) || undefined,
     ultima_oferta_por: raw?.ultima_oferta_por ?? raw?.ultimaOfertaPor ?? raw?.offerBy ?? raw?.offer_by,
-    // keep precio but prefer explicit precio if present; UI should prefer tarifa
     precio: Number(raw?.precio ?? raw?.monto ?? 0) || undefined,
     fecha_creacion: raw?.fecha_creacion ?? raw?.fechaCreacion ?? raw?.createdAt ?? raw?.fechaSolicitud ?? raw?.fecha_solicitud,
     tiempo_estimado: Number(raw?.tiempo_estimado ?? raw?.tiempoEstimado ?? raw?.eta ?? 0) || undefined,
@@ -102,7 +101,6 @@ export const orderService = {
       const payload = Array.isArray(response.data) ? response.data : [];
       return payload.map(normalizeOrder).filter((order) => order.id > 0);
     } catch (error: any) {
-      // Propagar información del error (status + payload) para que la UI lo maneje
       throw {
         status: error.response?.status,
         error: error.response?.data || { error: "Error al obtener pedidos pendientes" },
@@ -139,6 +137,18 @@ export const orderService = {
       throw {
         status: error.response?.status,
         error: error.response?.data || { error: "Error al obtener pedidos del cliente" },
+      };
+    }
+  },
+
+  async updateOrderState(orderId: number, estado: string): Promise<Order> {
+    try {
+      const response = await api.post<Order>(`${BASE_URL}/api/orders/${orderId}/state`, { estado });
+      return response.data;
+    } catch (error: any) {
+      throw {
+        status: error.response?.status,
+        error: error.response?.data || { error: 'Error al actualizar el estado del pedido' },
       };
     }
   },
