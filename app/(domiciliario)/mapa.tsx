@@ -14,8 +14,8 @@ import {
 import { MapView, Marker } from '../../src/components/map';
 import { THEME } from '../../src/constants/theme';
 import { AuthContext } from '../../src/context/AuthContext';
-import { orderService, type Order, normalizeOrder } from '../../src/services/orderService';
 import { driverService, type DriverActiveOrder } from '../../src/services/driverService';
+import { normalizeOrder, orderService, type Order } from '../../src/services/orderService';
 import { pendingOrderStore } from '../../src/services/pendingOrderStore';
 
 const CUSTOM_MAP_STYLE = [
@@ -352,13 +352,26 @@ export default function DomiciliarioMapScreen() {
                 style={styles.activeCard}
                 onPress={() => openActiveOrder(order)}
               >
-                <View style={styles.activeCardHeader}>
-                  <Text style={styles.activeCardId}>#{order.id}</Text>
-                  <Text style={styles.activeCardStatus}>{(order.estado || '').toUpperCase()}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.activeCardHeader}>
+                      <Text style={styles.activeCardId}>#{order.id}</Text>
+                      <Text style={styles.activeCardStatus}>{(order.estado || '').toUpperCase()}</Text>
+                    </View>
+                    <Text style={styles.activeCardRoute} numberOfLines={1}>
+                      {order.direccion_origen} → {order.direccion_destino}
+                    </Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.activeChatQuickBtn}
+                    onPress={() => router.push({
+                      pathname: '/(domiciliario)/mensajes',
+                      params: { idServicio: String(order.id) }
+                    })}
+                  >
+                    <Ionicons name="chatbubbles" size={22} color={THEME.primary} />
+                  </TouchableOpacity>
                 </View>
-                <Text style={styles.activeCardRoute}>
-                  {order.direccion_origen} → {order.direccion_destino}
-                </Text>
                 <Text style={styles.activeCardMeta}>
                   Tarifa: ${order.tarifa ?? order.precio ?? 0}
                 </Text>

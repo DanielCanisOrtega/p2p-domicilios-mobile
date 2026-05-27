@@ -83,28 +83,33 @@ export default function ClienteMensajesScreen() {
   };
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
-    const isOwnMessage =
-      item.idUsuario === user?.userId || item.idUsuario === user?.id;
+    const currentUserId = user?.userId || user?.id;
+    const senderId = item.idUsuario || (item as any).id_usuario || (item as any).userId;
+    const isOwnMessage = currentUserId && senderId && String(senderId) === String(currentUserId);
 
     return (
-      <View
-        style={[
-          styles.messageContainer,
-          isOwnMessage ? styles.ownMessage : styles.otherMessage,
-        ]}
-      >
-        {!isOwnMessage && (
-          <Text style={styles.senderName}>
-            {item.nombreUsuario || "Usuario"}
+      <View style={[styles.messageWrapper, isOwnMessage ? styles.ownWrapper : styles.otherWrapper]}>
+        <View
+          style={[
+            styles.messageContainer,
+            isOwnMessage ? styles.ownMessage : styles.otherMessage,
+          ]}
+        >
+          {!isOwnMessage && (
+            <Text style={styles.senderName}>
+              {item.nombreUsuario || "Usuario"}
+            </Text>
+          )}
+          <Text style={[styles.messageText, isOwnMessage && styles.ownMessageText]}>
+            {item.contenido}
           </Text>
-        )}
-        <Text style={styles.messageText}>{item.contenido}</Text>
-        <Text style={styles.messageTime}>
-          {new Date(item.fechaEnvio).toLocaleTimeString("es-CO", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </Text>
+          <Text style={[styles.messageTime, isOwnMessage && styles.ownMessageTime]}>
+            {new Date(item.fechaEnvio).toLocaleTimeString("es-CO", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </Text>
+        </View>
       </View>
     );
   };
@@ -240,19 +245,30 @@ const styles = StyleSheet.create({
     padding: 16,
     flexGrow: 1,
   },
-  messageContainer: {
-    maxWidth: "75%",
-    padding: 12,
-    borderRadius: 12,
+  messageWrapper: {
+    width: '100%',
     marginBottom: 12,
   },
+  ownWrapper: {
+    alignItems: 'flex-end',
+  },
+  otherWrapper: {
+    alignItems: 'flex-start',
+  },
+  messageContainer: {
+    maxWidth: "80%",
+    padding: 12,
+    borderRadius: 16,
+  },
   ownMessage: {
-    alignSelf: "flex-end",
     backgroundColor: THEME.primary,
+    borderBottomRightRadius: 4,
   },
   otherMessage: {
-    alignSelf: "flex-start",
     backgroundColor: THEME.card,
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: THEME.border,
   },
   senderName: {
     fontSize: 12,
@@ -265,10 +281,16 @@ const styles = StyleSheet.create({
     color: THEME.textPrimary,
     marginBottom: 4,
   },
+  ownMessageText: {
+    color: '#0a0f1c',
+  },
   messageTime: {
     fontSize: 10,
     color: THEME.textSecondary,
     alignSelf: "flex-end",
+  },
+  ownMessageTime: {
+    color: 'rgba(10, 15, 28, 0.5)',
   },
   emptyContainer: {
     flex: 1,

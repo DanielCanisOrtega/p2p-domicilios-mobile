@@ -3,10 +3,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MapView, Marker } from '../../src/components/map';
+import RatingModal from '../../src/components/rating/RatingModal';
 import ServicioCompletadoScreen from '../../src/components/ServicioCompletadoScreen';
 import { orderService } from '../../src/services/orderService';
 import { pendingOrderStore } from '../../src/services/pendingOrderStore';
-import RatingModal from '../../src/components/rating/RatingModal';
 
 const THEME = {
   background: '#0a0f1c',
@@ -24,7 +24,7 @@ export default function DetallePedidoDomiciliario() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  const orderId = Number(params.orderId);
+  const orderId = Number(params.orderId || params.id_servicio || params.idServicio || 0);
   const clientName = String(params.clientName || 'Cliente');
   const clientRating = String(params.clientRating || '4.5');
   const clientServices = String(params.clientServices || '0');
@@ -52,56 +52,34 @@ export default function DetallePedidoDomiciliario() {
 
   useEffect(() => {
     let mounted = true;
-    const syncStatus = async () => {
+    const poll = async () => {
       if (!orderId) return;
       try {
         const order = await orderService.getOrderById(orderId);
+        if (!mounted) return;
+
+        // Sincronizar estado
         const estado = (order.estado || '').toString().toLowerCase();
-        if (!mounted || !estado) return;
         if (estado.includes('pendiente')) setPedidoEstado('pendiente');
         else if (estado.includes('acept')) setPedidoEstado('aceptado');
         else if (estado.includes('camino')) setPedidoEstado('en_camino');
         else if (estado.includes('entreg')) setPedidoEstado('entregado');
         else if (estado.includes('cancel')) setPedidoEstado('cancelado');
 
+        // Sincronizar ofertas
         const oferta = order.oferta_actual ?? order.tarifa ?? order.precio ?? null;
         const ofertaNum = oferta ? Number(oferta) : null;
         const offerBy = (order.ultima_oferta_por || '').toString().trim().toUpperCase();
 
-        if (mounted && ofertaNum && ofertaNum !== latestObservedOffer && offerBy === 'CLIENTE') {
+        if (ofertaNum && ofertaNum !== latestObservedOffer && offerBy === 'CLIENTE') {
           setLatestObservedOffer(ofertaNum);
           setClientOfferValue(ofertaNum);
           setShowClientOfferModal(true);
         }
       } catch (err) {
-        // ignore status sync errors
-      }
-    };
-
-    syncStatus();
-    return () => {
-      mounted = false;
-    };
-  }, [orderId, latestObservedOffer]);
-
-  useEffect(() => {
-    let mounted = true;
-    const poll = async () => {
-      if (!orderId) return;
-      try {
-        const order = await orderService.getOrderById(orderId);
-        const oferta = order.oferta_actual ?? order.tarifa ?? order.precio ?? null;
-        const ofertaNum = oferta ? Number(oferta) : null;
-
-        if (mounted && ofertaNum && ofertaNum !== latestObservedOffer) {
-          setLatestObservedOffer(ofertaNum);
-          setClientOfferValue(ofertaNum);
-          setShowClientOfferModal(true);
-        }
-      } catch (err) {
-        console.error('Error polling order for client offers:', err);
+        console.debug('[pedidos] status sync error:', err);
       } finally {
-        if (mounted) pollingRef.current = setTimeout(poll, 4000);
+        if (mounted) pollingRef.current = setTimeout(poll, 4000) as any;
       }
     };
 
@@ -164,9 +142,9 @@ export default function DetallePedidoDomiciliario() {
       } else if (error?.status === 400 || error?.status === 409) {
         Alert.alert('Pedido no disponible', 'Este pedido ya fue tomado o cambió de estado.');
       } else {
+        const errorData = error?.error || {};
         const msg =
-          (typeof error?.error === 'string' && error.error) ||
-          error?.error?.error ||
+          (typeof errorData === 'string' ? errorData : errorData.message || errorData.error) ||
           'No se pudo aceptar el servicio. Intenta de nuevo.';
         Alert.alert('Error', msg);
       }
@@ -211,9 +189,9 @@ export default function DetallePedidoDomiciliario() {
       } else if (error?.status === 400 || error?.status === 409) {
         Alert.alert('Pedido no disponible', 'Este pedido ya fue tomado o cambió de estado.');
       } else {
+        const errorData = error?.error || {};
         const msg =
-          (typeof error?.error === 'string' && error.error) ||
-          error?.error?.error ||
+          (typeof errorData === 'string' ? errorData : errorData.message || errorData.error) ||
           'No se pudo rechazar el servicio. Intenta de nuevo.';
         Alert.alert('Error', msg);
       }
@@ -496,9 +474,20 @@ export default function DetallePedidoDomiciliario() {
                   )}
                   {pedidoEstado === 'en_camino' && (
                     <TouchableOpacity style={styles.finishServiceBtn} onPress={handleEntregado} disabled={isLoading}>
-                      <Text style={styles.finishServiceText}>Marcar entregado</Text>
+                      <Text style={styles.finishServiceText}>Finalizar Pedido</Text>
                     </TouchableOpacity>
                   )}
+                  <TouchableOpacity
+                    style={styles.chatActionBtn}
+                    onPress={() => router.push({
+                      pathname: '/(domiciliario)/mensajes',
+                      params: { idServicio: String(orderId) }
+                    })}
+                    disabled={isLoading}
+                  >
+                    <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
+                    <Text style={styles.chatActionText}>Chat</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.statusActionBtn} onPress={() => router.replace('/(domiciliario)/mapa')}>
                     <Text style={styles.statusActionText}>Volver al mapa</Text>
                   </TouchableOpacity>
@@ -520,6 +509,17 @@ export default function DetallePedidoDomiciliario() {
                     <Text style={styles.ratingText}>{clientRating} · {clientServices} servicios</Text>
                   </View>
                 </View>
+                <TouchableOpacity
+                  style={styles.clientChatAction}
+                  onPress={() => router.push({
+                    pathname: '/(domiciliario)/mensajes',
+                    params: { idServicio: String(orderId) }
+                  })}
+                  disabled={isLoading}
+                >
+                  <Ionicons name="chatbubble-ellipses" size={24} color={THEME.primary} />
+                  <Text style={styles.clientChatActionText}>Chat</Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.addressCard}>
@@ -774,9 +774,13 @@ const styles = StyleSheet.create({
   statusIconRejected: { backgroundColor: THEME.dangerText },
   statusTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
   statusText: { color: THEME.textSecondary, fontSize: 13, lineHeight: 18 },
-  statusActionBtn: { marginTop: 14, alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: '#fff' },
+  statusActionBtn: { alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: '#fff' },
   statusActionText: { color: '#0a0f1c', fontWeight: '700' },
   acceptedActionsRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   finishServiceBtn: { flex: 1, backgroundColor: THEME.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   finishServiceText: { color: '#0a0f1c', fontWeight: '800' },
+  chatActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#3b82f6', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 },
+  chatActionText: { color: '#fff', fontWeight: '700' },
+  clientChatAction: { alignItems: 'center', justifyContent: 'center', marginLeft: 'auto', paddingLeft: 10 },
+  clientChatActionText: { color: THEME.primary, fontSize: 10, fontWeight: '700', marginTop: 2 },
 });

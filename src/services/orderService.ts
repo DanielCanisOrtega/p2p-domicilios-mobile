@@ -1,4 +1,4 @@
-import { api, BASE_URL } from "./api";
+import { api } from "./api";
 
 interface OrderData {
   id_cliente: number;
@@ -84,7 +84,7 @@ export const orderService = {
   async createOrder(orderData: OrderData): Promise<Order> {
     try {
       console.debug('[orderService] createOrder payload:', orderData);
-      const response = await api.post<Order>(`${BASE_URL}/api/orders/create`, orderData);
+      const response = await api.post<Order>("/api/orders/create", orderData);
       console.debug('[orderService] createOrder response:', response?.data);
       return response.data;
     } catch (error: any) {
@@ -97,7 +97,7 @@ export const orderService = {
 
   async getPendingOrders(): Promise<Order[]> {
     try {
-      const response = await api.get<Order[]>(`${BASE_URL}/drivers/orders/pending`);
+      const response = await api.get<Order[]>("/drivers/orders/pending");
       const payload = Array.isArray(response.data) ? response.data : [];
       return payload.map(normalizeOrder).filter((order) => order.id > 0);
     } catch (error: any) {
@@ -110,15 +110,8 @@ export const orderService = {
 
   async getOrderById(orderId: number): Promise<Order> {
     try {
-      const response = await api.get<any>(`${BASE_URL}/api/orders/${orderId}/status`);
-      const normalized = normalizeOrder({
-        id_servicio: orderId,
-        estado: response.data?.estado,
-        oferta_actual: response.data?.oferta_actual,
-        tarifa: response.data?.tarifa,
-        ultima_oferta_por: response.data?.ultima_oferta_por,
-        tiempo_estimado: response.data?.tiempo_estimado,
-      });
+      const response = await api.get<any>(`/api/orders/${orderId}/status`);
+      const normalized = normalizeOrder({ ...response.data, id_servicio: orderId });
       return normalized;
     } catch (error: any) {
       throw {
@@ -130,7 +123,7 @@ export const orderService = {
 
   async getOrdersByClient(): Promise<Order[]> {
     try {
-      const response = await api.get<Order[]>(`${BASE_URL}/api/orders/client`);
+      const response = await api.get<Order[]>("/api/orders/client");
       const payload = Array.isArray(response.data) ? response.data : [];
       return payload.map(normalizeOrder).filter((order) => order.id > 0);
     } catch (error: any) {
@@ -143,7 +136,7 @@ export const orderService = {
 
   async updateOrderState(orderId: number, estado: string): Promise<Order> {
     try {
-      const response = await api.post<Order>(`${BASE_URL}/api/orders/${orderId}/state`, { estado });
+      const response = await api.post<Order>(`/api/orders/${orderId}/state`, { estado });
       return response.data;
     } catch (error: any) {
       throw {
@@ -155,7 +148,7 @@ export const orderService = {
 
   async acceptOrder(orderId: number): Promise<Order> {
     try {
-      const response = await api.post<Order>(`${BASE_URL}/api/orders/${orderId}/accept`, null);
+      const response = await api.post<Order>(`/api/orders/${orderId}/accept`, null);
       return response.data;
     } catch (error: any) {
       throw {
@@ -167,7 +160,7 @@ export const orderService = {
 
   async rejectOrder(orderId: number): Promise<Order> {
     try {
-      const response = await api.post<Order>(`${BASE_URL}/api/orders/${orderId}/reject`, null);
+      const response = await api.post<Order>(`/api/orders/${orderId}/reject`, null);
       return response.data;
     } catch (error: any) {
       throw {
@@ -180,7 +173,7 @@ export const orderService = {
   async counterOfferOrder(orderId: number, newPrice: number): Promise<Order> {
     try {
       console.debug('[orderService] counterOfferOrder payload:', { orderId, monto: newPrice });
-      const response = await api.post<any>(`${BASE_URL}/api/orders/${orderId}/counteroffer`, {
+      const response = await api.post<any>(`/api/orders/${orderId}/counteroffer`, {
         monto: newPrice,
       });
       console.debug('[orderService] counterOfferOrder response:', response?.data);
