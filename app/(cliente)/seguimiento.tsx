@@ -1,11 +1,12 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MapView, Marker } from '../../src/components/map';
 import RatingModal from '../../src/components/rating/RatingModal';
 import { THEME } from '../../src/constants/theme';
 import { driverService, type DriverDetail } from '../../src/services/driverService';
+import { orderService } from '../../src/services/orderService';
 import { websocketService, type TrackingUpdate } from '../../src/services/websocketService';
 
 const CUSTOM_MAP_STYLE = [
@@ -53,6 +54,9 @@ export default function SeguimientoScreen() {
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
   const [tracking, setTracking] = useState<TrackingUpdate | null>(null);
   const [pollingError, setPollingError] = useState<string | null>(null);
+  const [showCounterOfferModal, setShowCounterOfferModal] = useState(false);
+  const [counterOfferPrice, setCounterOfferPrice] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const userLat = Number(params.userLat ?? 7.8939);
   const userLon = Number(params.userLon ?? -72.4842);
@@ -148,7 +152,7 @@ export default function SeguimientoScreen() {
     const poll = async () => {
       try {
         setIsPolling(true);
-        const order = await (await import('../../src/services/orderService')).orderService.getOrderById(Number(idServicio));
+        const order = await orderService.getOrderById(Number(idServicio));
 
         if (mounted) setOrderStatus((order.estado || '').toString());
         if (mounted) setPollingError(null);
@@ -177,7 +181,7 @@ export default function SeguimientoScreen() {
             const choice = window.confirm(message + '\n\nAceptar = OK, Cancelar = abrir diálogo de rechazo/contraoferta');
             if (choice) {
               try {
-                await (await import('../../src/services/orderService')).orderService.acceptOrder(Number(idServicio));
+                await orderService.acceptOrder(Number(idServicio));
                 Alert.alert('Aceptado', 'Has aceptado la contraoferta. Continúa el flujo.');
               } catch (err: any) {
                 console.error('Error aceptando contraoferta:', err);
@@ -187,7 +191,7 @@ export default function SeguimientoScreen() {
               const value = window.prompt('Escribe tu contraoferta (número):', String(originalTarifa || ''));
               if (value && !isNaN(Number(value))) {
                 try {
-                  await (await import('../../src/services/orderService')).orderService.counterOfferOrder(Number(idServicio), Number(value));
+                  await orderService.counterOfferOrder(Number(idServicio), Number(value));
                   Alert.alert('Contraoferta enviada', 'Tu contraoferta fue enviada al domiciliario.');
                 } catch (err: any) {
                   console.error('Error enviando contraoferta cliente:', err);
@@ -203,7 +207,7 @@ export default function SeguimientoScreen() {
                 text: 'Aceptar',
                 onPress: async () => {
                   try {
-                    await (await import('../../src/services/orderService')).orderService.acceptOrder(Number(idServicio));
+                    await orderService.acceptOrder(Number(idServicio));
                     Alert.alert('Aceptado', 'Has aceptado la contraoferta. Continúa el flujo.');
                   } catch (err: any) {
                     console.error('Error aceptando contraoferta:', err);
@@ -217,7 +221,8 @@ export default function SeguimientoScreen() {
                 text: 'Contraoferta',
                 onPress: async () => {
                   setIsHandlingOffer(false);
-                  router.push({ pathname: '/(cliente)/mensajes', params: { idServicio } });
+                  setCounterOfferPrice(String(ofertaNum));
+                  setShowCounterOfferModal(true);
                 },
               },
               {
@@ -355,7 +360,7 @@ export default function SeguimientoScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await (await import('../../src/services/orderService')).orderService.updateOrderState(Number(idServicio), 'CANCELADO');
+            await orderService.updateOrderState(Number(idServicio), 'CANCELADO');
             setOrderStatus('cancelado');
             Alert.alert('Cancelado', 'El servicio fue cancelado.');
           } catch (err: any) {
@@ -368,6 +373,30 @@ export default function SeguimientoScreen() {
         },
       },
     ]);
+  };
+
+  const handleSendCounterOffer = async () => {
+    if (!idServicio) return;
+    const price = parseFloat(counterOfferPrice);
+    if (isNaN(price) || price <= 0) {
+      Alert.alert('Error', 'Por favor ingresa un precio válido');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await orderService.counterOfferOrder(Number(idServicio), price);
+      setShowCounterOfferModal(false);
+      setCounterOfferPrice('');
+      setIsHandlingOffer(false);
+      Alert.alert('Contraoferta enviada', 'Tu nueva propuesta ha sido enviada al domiciliario.');
+    } catch (err: any) {
+      console.error('Error enviando contraoferta:', err);
+      const msg = (typeof err?.error === 'string' && err.error) || err?.error?.error || 'No se pudo enviar la contraoferta. Intenta de nuevo.';
+      Alert.alert('Error', msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -568,6 +597,19 @@ export default function SeguimientoScreen() {
           </TouchableOpacity>
         </View>
 
+        {statusConfig.isPending && (
+          <TouchableOpacity 
+            style={[styles.rateButton, { backgroundColor: THEME.accent, marginTop: 10 }]} 
+            onPress={() => {
+              setCounterOfferPrice(String(originalTarifa));
+              setShowCounterOfferModal(true);
+            }}
+          >
+            <Ionicons name="cash-outline" size={20} color={THEME.background} />
+            <Text style={styles.rateButtonText}>Enviar Contraoferta</Text>
+          </TouchableOpacity>
+        )}
+
         {canCancel && (
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancelService}>
             <Ionicons name="close-circle" size={18} color="#ff8b8b" />
@@ -593,6 +635,58 @@ export default function SeguimientoScreen() {
           <Text style={styles.rateButtonText}>Calificar servicio</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={showCounterOfferModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowCounterOfferModal(false);
+          setCounterOfferPrice('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Hacer Contraoferta</Text>
+            <Text style={styles.modalSubtitle}>Tarifa actual: ${originalTarifa}</Text>
+
+            <TextInput
+              style={styles.priceInput}
+              placeholder="Ingresa tu nuevo precio"
+              placeholderTextColor={THEME.textSecondary}
+              keyboardType="decimal-pad"
+              value={counterOfferPrice}
+              onChangeText={setCounterOfferPrice}
+              editable={!isLoading}
+            />
+
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={[styles.btnCancel, isLoading && styles.buttonDisabled]}
+                onPress={() => {
+                  setShowCounterOfferModal(false);
+                  setCounterOfferPrice('');
+                }}
+                disabled={isLoading}
+              >
+                <Text style={styles.textCancel}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.btnSendOffer, isLoading && styles.buttonDisabled]}
+                onPress={handleSendCounterOffer}
+                disabled={isLoading || !counterOfferPrice}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#0a0f1c" size="small" />
+                ) : (
+                  <Text style={styles.textSendOffer}>Enviar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <RatingModal
         visible={showRatingModal}
@@ -938,4 +1032,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  buttonDisabled: { opacity: 0.6 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.8)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#12151c', borderRadius: 15, padding: 24, width: '85%', maxWidth: 400 },
+  modalTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold', marginBottom: 8 },
+  modalSubtitle: { color: THEME.textSecondary, fontSize: 14, marginBottom: 16 },
+  priceInput: {
+    backgroundColor: '#1b1f2a',
+    borderWidth: 1,
+    borderColor: THEME.primary,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  modalButtonsRow: { flexDirection: 'row', gap: 12 },
+  btnCancel: { flex: 1, backgroundColor: '#1b1f2a', paddingVertical: 12, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#262d3a' },
+  textCancel: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  btnSendOffer: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  textSendOffer: { color: '#0a0f1c', fontSize: 14, fontWeight: 'bold' },
 });

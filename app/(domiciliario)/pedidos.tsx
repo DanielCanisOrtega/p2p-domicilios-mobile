@@ -32,11 +32,14 @@ export default function DetallePedidoDomiciliario() {
   const fare = String(params.fare || '$0');
   const distance = String(params.distance || '0m');
 
+  // Extraer el valor numérico inicial de la tarifa para evitar que el primer poll dispare el modal innecesariamente
+  const initialFareNum = Number(fare.replace(/[^0-9]/g, '')) || null;
+
   const [isLoading, setIsLoading] = useState(false);
   const [pedidoEstado, setPedidoEstado] = useState<'pendiente' | 'aceptado' | 'en_camino' | 'entregado' | 'cancelado'>('pendiente');
   const [showCounterOfferModal, setShowCounterOfferModal] = useState(false);
   const [counterOfferPrice, setCounterOfferPrice] = useState('');
-  const [latestObservedOffer, setLatestObservedOffer] = useState<number | null>(null);
+  const [latestObservedOffer, setLatestObservedOffer] = useState<number | null>(initialFareNum);
   const [showClientOfferModal, setShowClientOfferModal] = useState(false);
   const [clientOfferValue, setClientOfferValue] = useState<number | null>(null);
   const pollingRef = useRef<number | null>(null);
@@ -49,6 +52,7 @@ export default function DetallePedidoDomiciliario() {
     setCounterOfferPrice('');
     setIsLoading(false);
     setReceivedRating(null);
+    setLatestObservedOffer(initialFareNum);
   }, [orderId]);
 
   useEffect(() => {
@@ -67,15 +71,20 @@ export default function DetallePedidoDomiciliario() {
         else if (apiEstado.includes('entreg')) setPedidoEstado('entregado');
         else if (apiEstado.includes('cancel')) setPedidoEstado('cancelado');
 
+        const isActuallyPending = apiEstado.includes('pend');
+
         // Sincronizar ofertas
         const oferta = order.oferta_actual ?? order.tarifa ?? order.precio ?? null;
         const ofertaNum = oferta ? Number(oferta) : null;
         const offerBy = (order.ultima_oferta_por || '').toString().trim().toUpperCase();
 
-        if (ofertaNum && ofertaNum !== latestObservedOffer && offerBy === 'CLIENTE' && pedidoEstado === 'pendiente') {
+        if (ofertaNum && ofertaNum !== latestObservedOffer) {
+          // Si la nueva oferta es del cliente y el pedido sigue en negociación (pendiente)
+          if (offerBy === 'CLIENTE' && isActuallyPending) {
+            setClientOfferValue(ofertaNum);
+            setShowClientOfferModal(true);
+          }
           setLatestObservedOffer(ofertaNum);
-          setClientOfferValue(ofertaNum);
-          setShowClientOfferModal(true);
         }
         pollingRef.current = setTimeout(poll, 4000) as any;
       } catch (err) {
@@ -804,15 +813,15 @@ const styles = StyleSheet.create({
   distanciaValue: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginTop: 5 },
   statLabel: { color: THEME.textSecondary, fontSize: 10, fontWeight: 'bold' },
   actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  btnRechazar: { flex: 1, backgroundColor: THEME.dangerBg, paddingVertical: 16, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  textRechazar: { color: THEME.dangerText, fontSize: 14, fontWeight: 'bold' },
-  btnContraoferta: { flex: 1, backgroundColor: THEME.accent, paddingVertical: 16, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  btnRechazar: { flex: 1, backgroundColor: '#ff4444', paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#cc0000' },
+  textRechazar: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  btnContraoferta: { flex: 1, backgroundColor: '#ffbb00', paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#cc9900' },
   textContraoferta: { color: '#0a0f1c', fontSize: 14, fontWeight: 'bold' },
-  btnAceptar: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 16, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  btnAceptar: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: THEME.primary },
   textAceptar: { color: '#0a0f1c', fontSize: 14, fontWeight: 'bold' },
   buttonDisabled: { opacity: 0.6 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.8)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: THEME.panel, borderRadius: 15, padding: 24, width: '85%', maxWidth: 400 },
+  modalContent: { backgroundColor: THEME.panel, borderRadius: 12, padding: 24, width: '85%', maxWidth: 400 },
   modalTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold', marginBottom: 8 },
   modalSubtitle: { color: THEME.textSecondary, fontSize: 14, marginBottom: 16 },
   priceInput: {
@@ -826,17 +835,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 20,
   },
-  modalButtonsRow: { flexDirection: 'row', gap: 12 },
-  btnCancel: { flex: 1, backgroundColor: THEME.card, paddingVertical: 12, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: THEME.divider },
+  modalButtonsRow: { flexDirection: 'row', gap: 10 },
+  btnCancel: { flex: 1, backgroundColor: THEME.card, paddingVertical: 12, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: THEME.divider },
   textCancel: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  btnSendOffer: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  btnSendOffer: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   textSendOffer: { color: '#0a0f1c', fontSize: 14, fontWeight: 'bold' },
-  btnAcceptOffer: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  btnAcceptOffer: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   textAcceptOffer: { color: '#0a0f1c', fontSize: 13, fontWeight: 'bold' },
-  btnCounterFromClient: { flex: 1, backgroundColor: THEME.accent, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  btnCounterFromClient: { flex: 1, backgroundColor: '#ffbb00', paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   textCounterFromClient: { color: '#0a0f1c', fontSize: 13, fontWeight: 'bold' },
-  btnRejectOffer: { flex: 1, backgroundColor: THEME.dangerBg, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  textRejectOffer: { color: THEME.dangerText, fontSize: 13, fontWeight: 'bold' },
+  btnRejectOffer: { flex: 1, backgroundColor: '#ff4444', paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  textRejectOffer: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   statusCard: { borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1 },
   statusCardAccepted: { backgroundColor: '#0e241c', borderColor: '#1d5d47' },
   statusCardRejected: { backgroundColor: '#241113', borderColor: '#5b262b' },
