@@ -31,18 +31,22 @@ export default function DomiciliarioMensajesScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
-    if (!idServicio || Number.isNaN(Number(idServicio))) {
-      setHasService(false);
-      setLoading(false);
+    // Esperar a que idServicio y user (token) estén listos
+    if (!idServicio || Number.isNaN(Number(idServicio)) || !user) {
+      if (!idServicio || Number.isNaN(Number(idServicio))) {
+        setHasService(false);
+        setLoading(false);
+      }
       return;
     }
 
+    setHasService(true);
     initializeChat();
 
     return () => {
       websocketService.unsubscribeFromChat(Number(idServicio));
     };
-  }, [idServicio]);
+  }, [idServicio, user]);
 
   const initializeChat = async () => {
     try {
@@ -83,31 +87,21 @@ export default function DomiciliarioMensajesScreen() {
   };
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
-    const currentUserId = user?.userId || user?.id;
-    const senderId = item.idUsuario || (item as any).id_usuario || (item as any).userId;
-    const isOwnMessage = currentUserId && senderId && String(senderId) === String(currentUserId);
+    const currentUserId = String(user?.userId ?? user?.id ?? '');
+    const senderId = String(item.idUsuario ?? '');
+    const isOwnMessage = currentUserId !== '' && currentUserId === senderId;
 
     return (
-      <View style={[styles.messageWrapper, isOwnMessage ? styles.ownWrapper : styles.otherWrapper]}>
-        <View
-          style={[
-            styles.messageContainer,
-            isOwnMessage ? styles.ownMessage : styles.otherMessage,
-          ]}
-        >
+      <View style={[styles.bubbleWrapper, isOwnMessage ? styles.myBubbleWrapper : styles.theirBubbleWrapper]}>
+        <View style={[styles.bubble, isOwnMessage ? styles.myBubble : styles.theirBubble]}>
           {!isOwnMessage && (
-            <Text style={styles.senderName}>
-              {item.nombreUsuario || "Usuario"}
-            </Text>
+            <Text style={styles.senderName}>{item.nombreUsuario || "Cliente"}</Text>
           )}
-          <Text style={[styles.messageText, isOwnMessage && styles.ownMessageText]}>
+          <Text style={[styles.messageText, isOwnMessage ? styles.myBubbleText : styles.theirBubbleText]}>
             {item.contenido}
           </Text>
-          <Text style={[styles.messageTime, isOwnMessage && styles.ownMessageTime]}>
-            {new Date(item.fechaEnvio).toLocaleTimeString("es-CO", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+          <Text style={[styles.messageTime, isOwnMessage ? styles.myTime : styles.theirTime]}>
+            {new Date(item.fechaEnvio).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
           </Text>
         </View>
       </View>
@@ -147,9 +141,17 @@ export default function DomiciliarioMensajesScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color={THEME.textPrimary} />
+          <Ionicons name="arrow-back" size={20} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chat - Pedido #{idServicio}</Text>
+        <View style={styles.headerInfo}>
+          <View style={styles.avatarMini}>
+            <Text style={{ fontSize: 16 }}>👤</Text>
+          </View>
+          <View>
+            <Text style={styles.headerTitle}>Pedido #{idServicio}</Text>
+            <Text style={styles.onlineText}>En línea</Text>
+          </View>
+        </View>
         <View
           style={[styles.statusIndicator, connected && styles.statusConnected]}
         />
@@ -173,13 +175,13 @@ export default function DomiciliarioMensajesScreen() {
         }
       />
 
-      <View style={styles.inputContainer}>
+      <View style={styles.footer}>
         <TextInput
           style={styles.input}
           value={inputText}
           onChangeText={setInputText}
           placeholder="Escribe un mensaje..."
-          placeholderTextColor={THEME.textSecondary}
+          placeholderTextColor="#6b7280"
           multiline
           maxLength={500}
         />
@@ -191,7 +193,7 @@ export default function DomiciliarioMensajesScreen() {
           onPress={sendMessage}
           disabled={!inputText.trim() || !connected}
         >
-          <Ionicons name="send" size={20} color={THEME.background} />
+          <Ionicons name="send" size={18} color="#0a0f1c" style={{ marginLeft: 3 }} />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -217,81 +219,78 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: THEME.card,
+    backgroundColor: '#12151c',
+    paddingTop: Platform.OS === 'android' ? 40 : 20,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: THEME.border,
+    borderBottomColor: '#1a1f2e',
   },
   backButton: {
-    marginRight: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#1c1f2a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 15,
   },
+  headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  avatarMini: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#1c1f2a', alignItems: 'center', justifyContent: 'center', marginRight: 10, borderWidth: 1, borderColor: THEME.primary },
   headerTitle: {
-    flex: 1,
     fontSize: 16,
     fontWeight: "600",
-    color: THEME.textPrimary,
+    color: 'white',
   },
+  onlineText: { color: THEME.primary, fontSize: 11, fontWeight: 'bold' },
   statusIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: THEME.inactive,
   },
   statusConnected: {
     backgroundColor: THEME.primary,
   },
   messagesList: {
-    padding: 16,
+    padding: 20,
     flexGrow: 1,
   },
-  messageWrapper: {
-    width: '100%',
-    marginBottom: 12,
-  },
-  ownWrapper: {
-    alignItems: 'flex-end',
-  },
-  otherWrapper: {
-    alignItems: 'flex-start',
-  },
-  messageContainer: {
-    maxWidth: "80%",
-    padding: 12,
-    borderRadius: 16,
-  },
-  ownMessage: {
+  bubbleWrapper: { marginBottom: 20, maxWidth: '85%' },
+  myBubbleWrapper: { alignSelf: 'flex-end' },
+  theirBubbleWrapper: { alignSelf: 'flex-start' },
+  bubble: { paddingHorizontal: 16, paddingVertical: 12 },
+  myBubble: {
     backgroundColor: THEME.primary,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderBottomLeftRadius: 18,
     borderBottomRightRadius: 4,
   },
-  otherMessage: {
-    backgroundColor: THEME.card,
+  theirBubble: {
+    backgroundColor: '#363842',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderBottomRightRadius: 18,
     borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: THEME.border,
   },
+  myBubbleText: { color: '#0a0f1c', fontSize: 15, fontWeight: '500' },
+  theirBubbleText: { color: 'white', fontSize: 15 },
   senderName: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: THEME.textSecondary,
+    fontSize: 11,
+    fontWeight: "700",
+    color: THEME.primary,
     marginBottom: 4,
+    textTransform: 'uppercase'
   },
-  messageText: {
-    fontSize: 14,
-    color: THEME.textPrimary,
-    marginBottom: 4,
-  },
-  ownMessageText: {
-    color: '#0a0f1c',
-  },
+  messageText: { fontSize: 15, lineHeight: 20 },
   messageTime: {
-    fontSize: 10,
-    color: THEME.textSecondary,
-    alignSelf: "flex-end",
+    fontSize: 9,
+    marginTop: 4,
+    alignSelf: 'flex-end',
   },
-  ownMessageTime: {
-    color: 'rgba(10, 15, 28, 0.5)',
-  },
+  myTime: { color: 'rgba(10, 15, 28, 0.5)' },
+  theirTime: { color: 'rgba(255, 255, 255, 0.5)' },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -307,33 +306,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: THEME.inactive,
   },
-  inputContainer: {
+  footer: {
     flexDirection: "row",
     alignItems: "flex-end",
-    padding: 12,
-    backgroundColor: THEME.card,
+    padding: 15,
+    backgroundColor: '#12151c',
     borderTopWidth: 1,
-    borderTopColor: THEME.border,
+    borderTopColor: '#1a1f2e',
   },
   input: {
     flex: 1,
-    backgroundColor: THEME.background,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 8,
-    color: THEME.textPrimary,
+    backgroundColor: '#1c1f2a',
+    borderRadius: 25,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
+    marginRight: 10,
+    color: 'white',
     maxHeight: 100,
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: '#2a2f40',
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: THEME.primary,
     justifyContent: "center",
     alignItems: "center",
   },
   sendButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
 });
