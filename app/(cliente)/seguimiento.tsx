@@ -598,6 +598,8 @@ export default function SeguimientoScreen() {
         visible={showRatingModal}
         idServicio={Number(idServicio || '0')}
         driverName={driverName}
+        role="CLIENT"
+        idCliente={Number(driverId) || undefined}
         onClose={() => setShowRatingModal(false)}
         onSuccess={() => {
           Alert.alert('Éxito', 'Calificación enviada correctamente');

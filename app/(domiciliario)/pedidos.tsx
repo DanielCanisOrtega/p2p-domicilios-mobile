@@ -4,20 +4,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MapView, Marker } from '../../src/components/map';
 import RatingModal from '../../src/components/rating/RatingModal';
-import ServicioCompletadoScreen from '../../src/components/ServicioCompletadoScreen';
+import { THEME } from '../../src/constants/theme';
 import { orderService } from '../../src/services/orderService';
 import { pendingOrderStore } from '../../src/services/pendingOrderStore';
+import { ratingService } from '../../src/services/ratingService';
 
-const THEME = {
+const COMP_COLORS = {
   background: '#0a0f1c',
-  panel: '#12151c',
-  card: '#1b1f2a',
+  card: '#111720',
   primary: '#17d5aa',
-  accent: '#f4b400',
-  dangerBg: '#2d1417',
-  dangerText: '#ff5252',
-  textSecondary: '#8d959f',
-  divider: '#262d3a',
+  star: '#f4b400',
+  textSecondary: '#8d95a4',
+  commentBg: '#0e1a16',
+  divider: '#1f1f1f',
 };
 
 export default function DetallePedidoDomiciliario() {
@@ -42,12 +41,14 @@ export default function DetallePedidoDomiciliario() {
   const [clientOfferValue, setClientOfferValue] = useState<number | null>(null);
   const pollingRef = useRef<number | null>(null);
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const [receivedRating, setReceivedRating] = useState<any>(null);
 
   useEffect(() => {
     setPedidoEstado('pendiente');
     setShowCounterOfferModal(false);
     setCounterOfferPrice('');
     setIsLoading(false);
+    setReceivedRating(null);
   }, [orderId]);
 
   useEffect(() => {
@@ -59,27 +60,26 @@ export default function DetallePedidoDomiciliario() {
         if (!mounted) return;
 
         // Sincronizar estado
-        const estado = (order.estado || '').toString().toLowerCase();
-        if (estado.includes('pendiente')) setPedidoEstado('pendiente');
-        else if (estado.includes('acept')) setPedidoEstado('aceptado');
-        else if (estado.includes('camino')) setPedidoEstado('en_camino');
-        else if (estado.includes('entreg')) setPedidoEstado('entregado');
-        else if (estado.includes('cancel')) setPedidoEstado('cancelado');
+        const apiEstado = (order.estado || '').toLowerCase();
+        if (apiEstado.includes('pendiente')) setPedidoEstado('pendiente');
+        else if (apiEstado.includes('acept')) setPedidoEstado('aceptado');
+        else if (apiEstado.includes('camino')) setPedidoEstado('en_camino');
+        else if (apiEstado.includes('entreg')) setPedidoEstado('entregado');
+        else if (apiEstado.includes('cancel')) setPedidoEstado('cancelado');
 
         // Sincronizar ofertas
         const oferta = order.oferta_actual ?? order.tarifa ?? order.precio ?? null;
         const ofertaNum = oferta ? Number(oferta) : null;
         const offerBy = (order.ultima_oferta_por || '').toString().trim().toUpperCase();
 
-        if (ofertaNum && ofertaNum !== latestObservedOffer && offerBy === 'CLIENTE') {
+        if (ofertaNum && ofertaNum !== latestObservedOffer && offerBy === 'CLIENTE' && pedidoEstado === 'pendiente') {
           setLatestObservedOffer(ofertaNum);
           setClientOfferValue(ofertaNum);
           setShowClientOfferModal(true);
         }
+        pollingRef.current = setTimeout(poll, 4000) as any;
       } catch (err) {
-        console.debug('[pedidos] status sync error:', err);
-      } finally {
-        if (mounted) pollingRef.current = setTimeout(poll, 4000) as any;
+        if (mounted) pollingRef.current = setTimeout(poll, 8000) as any;
       }
     };
 
@@ -90,6 +90,18 @@ export default function DetallePedidoDomiciliario() {
       if (pollingRef.current) clearTimeout(pollingRef.current);
     };
   }, [orderId, latestObservedOffer]);
+
+  useEffect(() => {
+    if (pedidoEstado === 'entregado' && orderId) {
+      const fetchRating = async () => {
+        try {
+          const data = await ratingService.getRatingByServiceId(orderId);
+          if (data) setReceivedRating(data);
+        } catch (e) { /* Calificación aún no disponible */ }
+      };
+      fetchRating();
+    }
+  }, [pedidoEstado, orderId]);
 
   const originLat = Number(params.originLat || 7.8939);
   const originLon = Number(params.originLon || -72.5078);
@@ -290,19 +302,15 @@ export default function DetallePedidoDomiciliario() {
 
     setIsLoading(true);
     try {
-      const latest = await orderService.getOrderById(orderId);
-      const estado = (latest.estado || '').toString().toUpperCase();
-      if (estado === 'PENDIENTE') {
-        await orderService.acceptOrder(orderId);
-      }
       await orderService.updateOrderState(orderId, 'EN_CAMINO');
       pendingOrderStore.rememberActive(orderId);
       setPedidoEstado('en_camino');
       Alert.alert('Estado actualizado', 'Marcaste el servicio como en camino');
     } catch (error: any) {
+      console.error('Error al iniciar recorrido:', error);
+      const errorData = error?.error || {};
       const msg =
-        (typeof error?.error === 'string' && error.error) ||
-        error?.error?.error ||
+        (typeof errorData === 'string' ? errorData : errorData.message || errorData.error) ||
         'No se pudo actualizar el estado. Intenta de nuevo.';
       Alert.alert('Error', msg);
     } finally {
@@ -321,9 +329,9 @@ export default function DetallePedidoDomiciliario() {
           setPedidoEstado('entregado');
           setShowRatingModal(true);
         } catch (error: any) {
+          const errorData = error?.error || {};
           const msg =
-            (typeof error?.error === 'string' && error.error) ||
-            error?.error?.error ||
+            (typeof errorData === 'string' ? errorData : errorData.message || errorData.error) ||
             'No se pudo actualizar el estado. Intenta de nuevo.';
           Alert.alert('Error', msg);
         }
@@ -343,9 +351,9 @@ export default function DetallePedidoDomiciliario() {
             setPedidoEstado('entregado');
             setShowRatingModal(true);
           } catch (error: any) {
+            const errorData = error?.error || {};
             const msg =
-              (typeof error?.error === 'string' && error.error) ||
-              error?.error?.error ||
+              (typeof errorData === 'string' ? errorData : errorData.message || errorData.error) ||
               'No se pudo actualizar el estado. Intenta de nuevo.';
             Alert.alert('Error', msg);
           } finally {
@@ -358,18 +366,82 @@ export default function DetallePedidoDomiciliario() {
 
   if (pedidoEstado === 'entregado') {
     return (
-      <>
-        <ServicioCompletadoScreen
-          clientName={clientName}
-          orderId={orderId}
-          fare={fare}
-          clientRating={clientRating}
-          comment='"Muy puntual y amable, recogió el paquete sin problema. ¡Excelente!"'
-          tags={['Puntual', 'Amable', 'Paquete en buen estado']}
-          earnings={fare}
-          dailyTotal="$42.000"
-          onSearchNew={() => router.replace('/(domiciliario)/mapa')}
-        />
+      <SafeAreaView style={compStyles.container}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={compStyles.scrollContent}>
+          
+          {/* ICONO DE CHECK Y TITULO */}
+          <View style={compStyles.headerSection}>
+            <View style={compStyles.checkCircle}>
+              <Ionicons name="checkmark" size={45} color={THEME.primary} />
+            </View>
+            <Text style={compStyles.mainTitle}>¡Servicio completado!</Text>
+            <Text style={compStyles.subtitle}>Cuéntanos cómo fue tu experiencia con {clientName}</Text>
+          </View>
+
+          {/* TARJETA RESUMEN CLIENTE */}
+          <View style={compStyles.clientSummaryCard}>
+            <View style={compStyles.avatarContainer}>
+              <Text style={{ fontSize: 24 }}>👤</Text>
+            </View>
+            <View style={compStyles.clientInfo}>
+              <Text style={compStyles.clientName}>{clientName}</Text>
+              <Text style={compStyles.serviceMeta}>Servicio #{orderId} · {fare}</Text>
+              <View style={compStyles.starsRow}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Ionicons key={s} name={s <= (receivedRating?.puntuacion || 0) ? "star" : "star-outline"} size={16} color={THEME.warning} style={{ marginRight: 2 }} />
+                ))}
+                <Text style={compStyles.ratingValue}>{receivedRating?.puntuacion?.toFixed(1) || '0.0'}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* COMENTARIO DEL CLIENTE */}
+          <View style={compStyles.commentBox}>
+            <Text style={compStyles.label}>Comentario del cliente</Text>
+            <Text style={compStyles.commentText}>
+              {receivedRating?.comentario ? `"${receivedRating.comentario}"` : "Esperando a que el cliente califique el servicio..."}
+            </Text>
+          </View>
+
+          {/* ETIQUETAS */}
+          <Text style={[compStyles.label, { alignSelf: 'flex-start', marginBottom: 10 }]}>Etiquetas recibidas</Text>
+          <View style={compStyles.tagsRow}>
+            <View style={compStyles.tag}><Text style={compStyles.tagText}>Puntual</Text></View>
+            <View style={compStyles.tag}><Text style={compStyles.tagText}>Amable</Text></View>
+            <View style={compStyles.tag}><Text style={compStyles.tagText}>Paquete en buen estado</Text></View>
+          </View>
+
+          {/* TARJETA DE GANANCIAS */}
+          <View style={compStyles.earningsCard}>
+            <Text style={compStyles.earningsLabel}>Ganaste en esta entrega</Text>
+            <Text style={compStyles.earningsValue}>{fare}</Text>
+            <Text style={compStyles.earningsTotal}>Acumulado hoy: $42.000</Text>
+          </View>
+
+          {/* CALIFICACIÓN PROMEDIO */}
+          <View style={compStyles.averageCard}>
+            <Text style={compStyles.earningsLabel}>Tu calificación promedio</Text>
+            <View style={compStyles.averageRow}>
+              {[1, 2, 3, 4].map((s) => (
+                <Ionicons key={s} name="star" size={32} color={COMP_COLORS.star} style={{ marginRight: 5 }} />
+              ))}
+              <Ionicons name="star-outline" size={32} color={COMP_COLORS.star} />
+              <Text style={compStyles.averageNumber}>4.9</Text>
+            </View>
+          </View>
+
+          {/* BOTONES FINALES */}
+          <TouchableOpacity 
+            style={compStyles.mainButton}
+            onPress={() => router.replace('/(domiciliario)/mapa')}
+          >
+            <Text style={compStyles.mainButtonText}>Buscar nuevo servicio</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={compStyles.historyBtn} onPress={() => router.replace('/(domiciliario)/pedidos')}>
+            <Text style={compStyles.historyBtnText}>Ver historial de entregas</Text>
+          </TouchableOpacity>
+        </ScrollView>
 
         <RatingModal
           visible={showRatingModal}
@@ -383,7 +455,7 @@ export default function DetallePedidoDomiciliario() {
             setShowRatingModal(false);
           }}
         />
-      </>
+      </SafeAreaView>
     );
   }
 
@@ -505,7 +577,7 @@ export default function DetallePedidoDomiciliario() {
                 <View style={styles.clientInfo}>
                   <Text style={styles.clientName}>{clientName}</Text>
                   <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={14} color={THEME.accent} />
+                    <Ionicons name="star" size={14} color={THEME.warning} />
                     <Text style={styles.ratingText}>{clientRating} · {clientServices} servicios</Text>
                   </View>
                 </View>
@@ -783,4 +855,51 @@ const styles = StyleSheet.create({
   chatActionText: { color: '#fff', fontWeight: '700' },
   clientChatAction: { alignItems: 'center', justifyContent: 'center', marginLeft: 'auto', paddingLeft: 10 },
   clientChatActionText: { color: THEME.primary, fontSize: 10, fontWeight: '700', marginTop: 2 },
+});
+
+const compStyles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COMP_COLORS.background },
+  scrollContent: { paddingHorizontal: 20, alignItems: 'center', paddingBottom: 40 },
+  
+  // Header
+  headerSection: { alignItems: 'center', marginTop: 40, marginBottom: 30 },
+  checkCircle: { width: 85, height: 85, borderRadius: 45, borderWidth: 2, borderColor: COMP_COLORS.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  mainTitle: { color: '#fff', fontSize: 28, fontWeight: 'bold', marginBottom: 8 },
+  subtitle: { color: COMP_COLORS.textSecondary, fontSize: 14, textAlign: 'center' },
+
+  // Cliente Card
+  clientSummaryCard: { width: '100%', backgroundColor: COMP_COLORS.card, borderRadius: 12, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  avatarContainer: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#333' },
+  clientInfo: { marginLeft: 15, flex: 1 },
+  clientName: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  serviceMeta: { color: COMP_COLORS.textSecondary, fontSize: 13, marginVertical: 3 },
+  starsRow: { flexDirection: 'row', alignItems: 'center' },
+  ratingValue: { color: '#fff', fontSize: 14, fontWeight: 'bold', marginLeft: 8 },
+
+  // Comentario
+  commentBox: { width: '100%', backgroundColor: COMP_COLORS.commentBg, borderRadius: 10, padding: 15, marginBottom: 20, borderWidth: 0.5, borderColor: '#173d2d' },
+  label: { color: COMP_COLORS.textSecondary, fontSize: 11, fontWeight: '600', textTransform: 'uppercase', marginBottom: 5 },
+  commentText: { color: '#fff', fontSize: 14, fontStyle: 'italic', lineHeight: 20 },
+
+  // Etiquetas
+  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%', marginBottom: 30 },
+  tag: { borderRadius: 20, borderWidth: 1, borderColor: COMP_COLORS.primary, paddingVertical: 6, paddingHorizontal: 15 },
+  tagText: { color: COMP_COLORS.primary, fontSize: 12, fontWeight: 'bold' },
+
+  // Ganancias
+  earningsCard: { width: '100%', backgroundColor: COMP_COLORS.card, borderRadius: 15, padding: 25, alignItems: 'center', marginBottom: 15 },
+  earningsLabel: { color: COMP_COLORS.textSecondary, fontSize: 13, marginBottom: 10 },
+  earningsValue: { color: COMP_COLORS.primary, fontSize: 48, fontWeight: 'bold' },
+  earningsTotal: { color: COMP_COLORS.textSecondary, fontSize: 11, marginTop: 5 },
+
+  // Promedio
+  averageCard: { width: '100%', backgroundColor: COMP_COLORS.card, borderRadius: 15, padding: 25, alignItems: 'center', marginBottom: 30 },
+  averageRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  averageNumber: { color: COMP_COLORS.star, fontSize: 32, fontWeight: 'bold', marginLeft: 15 },
+
+  // Botón
+  mainButton: { width: '100%', backgroundColor: COMP_COLORS.primary, borderRadius: 12, paddingVertical: 18, alignItems: 'center', marginBottom: 20 },
+  mainButtonText: { color: '#000', fontSize: 18, fontWeight: 'bold' },
+  historyBtn: { paddingBottom: 20 },
+  historyBtnText: { color: COMP_COLORS.textSecondary, fontSize: 14, textDecorationLine: 'underline' }
 });

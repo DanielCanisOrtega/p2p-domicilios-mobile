@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
 import {
-  Modal,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   Alert,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../../constants/theme';
 import { ratingService } from '../../services/ratingService';
 
@@ -36,6 +36,21 @@ export default function RatingModal({
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (visible && idServicio) {
+      const loadExisting = async () => {
+        try {
+          const data = await ratingService.getRatingByServiceId(idServicio);
+          if (data) {
+            setRating(data.puntuacion || 0);
+            setComment(data.comentario || '');
+          }
+        } catch (e) { /* No existe previa */ }
+      };
+      loadExisting();
+    }
+  }, [visible, idServicio]);
+
   const handleSubmit = async () => {
       if (rating === 0) {
         Alert.alert('Error', 'Por favor selecciona una calificación');
@@ -53,7 +68,7 @@ export default function RatingModal({
         idServicio,
         puntuacion: rating,
         comentario: comment.trim() || undefined,
-        idCliente: role === 'DOMICILIARIO' ? idCliente : undefined,
+        idCalificado: idCliente, // Enviamos el ID del usuario calificado (sea driver o client)
       });
 
       Alert.alert('¡Gracias!', 'Tu calificación ha sido enviada');

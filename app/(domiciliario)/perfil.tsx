@@ -1,8 +1,8 @@
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
-import { useContext } from 'react';
 import { useRouter } from 'expo-router';
-import { AuthContext } from '../../src/context/AuthContext';
+import { useContext } from 'react';
+import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { THEME } from '../../src/constants/theme';
+import { AuthContext } from '../../src/context/AuthContext';
 
 export default function DomiciliarioPerfilScreen() {
   const { user, logout } = useContext(AuthContext);
@@ -12,8 +12,9 @@ export default function DomiciliarioPerfilScreen() {
     if (Platform.OS === 'web') {
       const confirmed = window.confirm('¿Estás seguro que deseas cerrar sesión?');
       if (!confirmed) return;
+      await performLogout();
     } else {
-      return Alert.alert('Cerrar Sesión', '¿Estás seguro?', [
+      Alert.alert('Cerrar Sesión', '¿Estás seguro?', [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Cerrar Sesión',
@@ -22,8 +23,6 @@ export default function DomiciliarioPerfilScreen() {
         },
       ]);
     }
-
-    await performLogout();
   };
 
   const performLogout = async () => {

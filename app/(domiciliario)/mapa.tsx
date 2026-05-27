@@ -4,12 +4,12 @@ import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
+    Alert,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { MapView, Marker } from '../../src/components/map';
 import { THEME } from '../../src/constants/theme';
@@ -217,8 +217,10 @@ export default function DomiciliarioMapScreen() {
           const loc = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.Balanced,
           });
-          setLocation(loc);
-          await sendLocation(loc.coords);
+          if (loc) {
+            setLocation(loc);
+            await sendLocation(loc.coords);
+          }
         } catch (error) {
           // ignore location errors
         }
@@ -232,7 +234,7 @@ export default function DomiciliarioMapScreen() {
         clearInterval(locationIntervalRef.current);
       }
     };
-  }, [location, isActive, activeOrderId]);
+  }, [isActive, location]);
 
   const openRequest = (request: Order) => {
     latestActiveServiceIdRef.current = request.id;
