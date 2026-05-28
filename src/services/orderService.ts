@@ -185,4 +185,18 @@ export const orderService = {
       };
     }
   },
+
+  async changeState(orderId: number, estado: string): Promise<Order> {
+    try {
+      const response = await api.post<Order>(`/api/orders/${orderId}/state`, {
+        estado,
+      });
+      return normalizeOrder(response.data);
+    } catch (error: any) {
+      throw {
+        status: error.response?.status,
+        error: error.response?.data || { error: "Error al actualizar el estado" },
+      };
+    }
+  },
 };

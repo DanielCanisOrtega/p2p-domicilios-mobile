@@ -51,6 +51,7 @@ export default function SeguimientoScreen() {
   }>();
 
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const [hasPromptedRating, setHasPromptedRating] = useState(false);
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
   const [tracking, setTracking] = useState<TrackingUpdate | null>(null);
   const [pollingError, setPollingError] = useState<string | null>(null);
@@ -62,19 +63,19 @@ export default function SeguimientoScreen() {
   const userLon = Number(params.userLon ?? -72.4842);
   const [driverInfo, setDriverInfo] = useState<DriverDetail | null>(null);
 
-  const driverLat = Number(driverInfo?.latitud ?? params.driverLat ?? userLat + 0.0015);
-  const driverLon = Number(driverInfo?.longitud ?? params.driverLon ?? userLon + 0.0015);
-  const driverId = String(driverInfo?.id ?? params.driverId ?? 'N/A');
-  const driverName = driverInfo?.nombre || params.driverName || 'Domiciliario asignado';
-  const phone = params.driverPhone || 'No disponible';
-  const email = driverInfo?.email || params.driverEmail || 'No disponible';
-  const vehicle = driverInfo?.vehiculo || params.driverVehicle || 'Moto';
-  const plate = driverInfo?.placa || params.driverPlate || 'Sin placa';
-  const verified = driverInfo?.verificado ?? (params.driverVerified === 'true');
-  const rating = driverInfo?.calificacion != null ? driverInfo.calificacion.toFixed(1) : (params.driverRating || 'N/A');
+  const driverLat = Number(driverInfo?.latitud ?? userLat);
+  const driverLon = Number(driverInfo?.longitud ?? userLon);
+  const driverId = driverInfo?.id != null ? String(driverInfo.id) : '';
+  const driverName = driverInfo?.nombre || 'Cargando domiciliario...';
+  const phone = 'Cargando...';
+  const email = driverInfo?.email || 'Cargando...';
+  const vehicle = driverInfo?.vehiculo || 'Cargando...';
+  const plate = driverInfo?.placa || 'Cargando...';
+  const verified = driverInfo?.verificado ?? false;
+  const rating = driverInfo?.calificacion != null ? driverInfo.calificacion.toFixed(1) : 'N/A';
   const distance = driverInfo?.distancia != null
     ? `${Number(driverInfo.distancia).toFixed(1)} km`
-    : (params.driverDistanceKm ? `${Number(params.driverDistanceKm).toFixed(1)} km` : 'N/A');
+    : 'N/A';
   const idServicio = params.idServicio;
   const originalTarifa = Number(params.originalTarifa ?? '0');
 
@@ -181,7 +182,7 @@ export default function SeguimientoScreen() {
             const choice = window.confirm(message + '\n\nAceptar = OK, Cancelar = abrir diálogo de rechazo/contraoferta');
             if (choice) {
               try {
-                await orderService.acceptOrder(Number(idServicio));
+                await orderService.changeState(Number(idServicio), 'ACEPTADO');
                 Alert.alert('Aceptado', 'Has aceptado la contraoferta. Continúa el flujo.');
               } catch (err: any) {
                 console.error('Error aceptando contraoferta:', err);
@@ -198,7 +199,13 @@ export default function SeguimientoScreen() {
                   Alert.alert('Error', 'No se pudo enviar la contraoferta. Intenta de nuevo.');
                 }
               } else {
-                Alert.alert('Rechazado', 'Has rechazado la oferta. Puedes solicitar un nuevo servicio.');
+                try {
+                  await orderService.changeState(Number(idServicio), 'CANCELADO');
+                  Alert.alert('Rechazado', 'Has rechazado la oferta. Puedes solicitar un nuevo servicio.');
+                } catch (err: any) {
+                  console.error('Error rechazando contraoferta:', err);
+                  Alert.alert('Error', 'No se pudo rechazar la contraoferta. Intenta de nuevo.');
+                }
               }
             }
           } else {
@@ -207,7 +214,7 @@ export default function SeguimientoScreen() {
                 text: 'Aceptar',
                 onPress: async () => {
                   try {
-                    await orderService.acceptOrder(Number(idServicio));
+                    await orderService.changeState(Number(idServicio), 'ACEPTADO');
                     Alert.alert('Aceptado', 'Has aceptado la contraoferta. Continúa el flujo.');
                   } catch (err: any) {
                     console.error('Error aceptando contraoferta:', err);
@@ -228,9 +235,16 @@ export default function SeguimientoScreen() {
               {
                 text: 'Rechazar',
                 style: 'destructive',
-                onPress: () => {
-                  setIsHandlingOffer(false);
-                  Alert.alert('Rechazado', 'Has rechazado la oferta. Puedes solicitar un nuevo servicio.');
+                onPress: async () => {
+                  try {
+                    await orderService.changeState(Number(idServicio), 'CANCELADO');
+                    Alert.alert('Rechazado', 'Has rechazado la oferta. Puedes solicitar un nuevo servicio.');
+                  } catch (err: any) {
+                    console.error('Error rechazando contraoferta:', err);
+                    Alert.alert('Error', 'No se pudo rechazar la contraoferta. Intenta de nuevo.');
+                  } finally {
+                    setIsHandlingOffer(false);
+                  }
                 },
               },
             ]);
@@ -259,6 +273,13 @@ export default function SeguimientoScreen() {
 
   useEffect(() => {
     if (!idServicio) return;
+    setHasPromptedRating(false);
+  }, [idServicio]);
+
+  useEffect(() => {
+    if (!idServicio) return;
+
+    setDriverInfo(null);
 
     let mounted = true;
     const loadDriver = async () => {
@@ -266,7 +287,7 @@ export default function SeguimientoScreen() {
         const info = await driverService.getDriverByOrder(Number(idServicio));
         if (mounted) setDriverInfo(info);
       } catch (err) {
-        // ignore if driver not assigned yet
+        if (mounted) setDriverInfo(null);
       }
     };
 
@@ -341,6 +362,16 @@ export default function SeguimientoScreen() {
     if (status.includes('cancel')) return 'Cancelado';
     return 'Pendiente';
   }, [orderStatus]);
+
+  useEffect(() => {
+    const status = (orderStatus || '').toLowerCase();
+    if (!idServicio) return;
+
+    if (status.includes('entreg') && !hasPromptedRating) {
+      setShowRatingModal(true);
+      setHasPromptedRating(true);
+    }
+  }, [orderStatus, hasPromptedRating, idServicio]);
 
   const canCancel = useMemo(() => {
     const status = (orderStatus || '').toLowerCase();
@@ -690,7 +721,7 @@ export default function SeguimientoScreen() {
 
       <RatingModal
         visible={showRatingModal}
-        idServicio={Number(idServicio || '0')}
+        idServicio={idServicio ? Number(idServicio) : 0}
         driverName={driverName}
         role="CLIENT"
         idCliente={Number(driverId) || undefined}

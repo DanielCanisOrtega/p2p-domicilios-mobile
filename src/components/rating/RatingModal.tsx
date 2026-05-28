@@ -35,23 +35,36 @@ export default function RatingModal({
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasExistingRating, setHasExistingRating] = useState(false);
+
+  const normalizedServiceId = Number(idServicio);
 
   useEffect(() => {
-    if (visible && idServicio) {
+    if (visible && Number.isFinite(normalizedServiceId) && normalizedServiceId > 0) {
       const loadExisting = async () => {
         try {
-          const data = await ratingService.getRatingByServiceId(idServicio);
+          const data = await ratingService.getRating(normalizedServiceId);
           if (data) {
             setRating(data.puntuacion || 0);
             setComment(data.comentario || '');
+            setHasExistingRating(true);
           }
-        } catch (e) { /* No existe previa */ }
+        } catch (e) {
+          setHasExistingRating(false);
+        }
       };
       loadExisting();
     }
   }, [visible, idServicio]);
 
   const handleSubmit = async () => {
+      if (hasExistingRating) {
+        return;
+      }
+      if (!Number.isFinite(normalizedServiceId) || normalizedServiceId <= 0) {
+        Alert.alert('Error', 'No se pudo identificar el servicio para calificar');
+        return;
+      }
       if (rating === 0) {
         Alert.alert('Error', 'Por favor selecciona una calificación');
         return;
@@ -65,10 +78,10 @@ export default function RatingModal({
     try {
       setLoading(true);
       await ratingService.createRating({
-        idServicio,
+        idServicio: normalizedServiceId,
         puntuacion: rating,
         comentario: comment.trim() || undefined,
-        idCalificado: idCliente, // Enviamos el ID del usuario calificado (sea driver o client)
+        idCliente: role === 'DOMICILIARIO' ? idCliente : undefined,
       });
 
       Alert.alert('¡Gracias!', 'Tu calificación ha sido enviada');
@@ -85,6 +98,7 @@ export default function RatingModal({
   const handleClose = () => {
     setRating(0);
     setComment('');
+    setHasExistingRating(false);
     onClose();
   };
 
@@ -102,13 +116,17 @@ export default function RatingModal({
           </TouchableOpacity>
 
           <Text style={styles.title}>Calificar servicio</Text>
-          <Text style={styles.subtitle}>¿Cómo fue tu experiencia con {driverName}?</Text>
+          <Text style={styles.subtitle}>
+            {hasExistingRating ? 'Ya calificaste este servicio.' : `¿Cómo fue tu experiencia con ${driverName}?`}
+          </Text>
 
           <View style={styles.starsContainer}>
             {[1, 2, 3, 4, 5].map((star) => (
               <TouchableOpacity
                 key={star}
-                onPress={() => setRating(star)}
+                onPress={() => {
+                  if (!hasExistingRating) setRating(star);
+                }}
                 style={styles.starButton}
               >
                 <Ionicons
@@ -124,25 +142,28 @@ export default function RatingModal({
             style={styles.commentInput}
             value={comment}
             onChangeText={setComment}
-            placeholder="Comentario (opcional)"
+            placeholder={hasExistingRating ? '' : 'Comentario (opcional)'}
             placeholderTextColor={THEME.textSecondary}
             multiline
             maxLength={500}
             numberOfLines={4}
             textAlignVertical="top"
+            editable={!hasExistingRating}
           />
 
-          <TouchableOpacity
-            style={[styles.submitButton, (rating === 0 || loading) && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={rating === 0 || loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={THEME.background} />
-            ) : (
-              <Text style={styles.submitButtonText}>Enviar calificación</Text>
-            )}
-          </TouchableOpacity>
+          {!hasExistingRating && (
+            <TouchableOpacity
+              style={[styles.submitButton, (rating === 0 || loading) && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={rating === 0 || loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={THEME.background} />
+              ) : (
+                <Text style={styles.submitButtonText}>Enviar calificación</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>

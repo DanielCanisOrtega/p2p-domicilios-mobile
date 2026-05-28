@@ -9,6 +9,8 @@ import { orderService } from '../../src/services/orderService';
 import { pendingOrderStore } from '../../src/services/pendingOrderStore';
 import { ratingService } from '../../src/services/ratingService';
 
+type PedidoEstado = 'pendiente' | 'aceptado' | 'en_camino' | 'entregado' | 'cancelado';
+
 const COMP_COLORS = {
   background: '#0a0f1c',
   card: '#111720',
@@ -36,10 +38,11 @@ export default function DetallePedidoDomiciliario() {
   const initialFareNum = Number(fare.replace(/[^0-9]/g, '')) || null;
 
   const [isLoading, setIsLoading] = useState(false);
-  const [pedidoEstado, setPedidoEstado] = useState<'pendiente' | 'aceptado' | 'en_camino' | 'entregado' | 'cancelado'>('pendiente');
+  const [pedidoEstado, setPedidoEstado] = useState<PedidoEstado>('pendiente');
   const [showCounterOfferModal, setShowCounterOfferModal] = useState(false);
   const [counterOfferPrice, setCounterOfferPrice] = useState('');
   const [latestObservedOffer, setLatestObservedOffer] = useState<number | null>(initialFareNum);
+  const lastObservedStatusRef = useRef<string>('');
   const [showClientOfferModal, setShowClientOfferModal] = useState(false);
   const [clientOfferValue, setClientOfferValue] = useState<number | null>(null);
   const pollingRef = useRef<number | null>(null);
@@ -70,6 +73,20 @@ export default function DetallePedidoDomiciliario() {
         else if (apiEstado.includes('camino')) setPedidoEstado('en_camino');
         else if (apiEstado.includes('entreg')) setPedidoEstado('entregado');
         else if (apiEstado.includes('cancel')) setPedidoEstado('cancelado');
+
+        const prevStatus = lastObservedStatusRef.current;
+        if (apiEstado && apiEstado !== prevStatus) {
+          if (apiEstado.includes('acept')) {
+            Alert.alert('Contraoferta aceptada', 'El cliente aceptó la contraoferta.');
+            pendingOrderStore.rememberActive(orderId);
+          }
+          if (apiEstado.includes('cancel')) {
+            pendingOrderStore.forgetActive(orderId);
+            Alert.alert('Servicio cancelado', 'El cliente canceló la contraoferta.');
+            router.replace('/(domiciliario)/mapa');
+          }
+          lastObservedStatusRef.current = apiEstado;
+        }
 
         const isActuallyPending = apiEstado.includes('pend');
 
@@ -104,9 +121,11 @@ export default function DetallePedidoDomiciliario() {
     if (pedidoEstado === 'entregado' && orderId) {
       const fetchRating = async () => {
         try {
-          const data = await ratingService.getRatingByServiceId(orderId);
+          const data = await ratingService.getRating(orderId);
           if (data) setReceivedRating(data);
-        } catch (e) { /* Calificación aún no disponible */ }
+        } catch (e) {
+          // Calificación aún no disponible
+        }
       };
       fetchRating();
     }
@@ -454,7 +473,7 @@ export default function DetallePedidoDomiciliario() {
 
         <RatingModal
           visible={showRatingModal}
-          idServicio={orderId}
+          idServicio={Number(orderId) || 0}
           driverName={clientName}
           role="DOMICILIARIO"
           idCliente={clientId || undefined}
@@ -577,19 +596,18 @@ export default function DetallePedidoDomiciliario() {
             </View>
           )}
 
-          {pedidoEstado !== 'entregado' && (
-            <>
-              <View style={styles.clientCard}>
-                <View style={styles.clientAvatar}>
-                  <Text style={{ fontSize: 24 }}>👤</Text>
+          <>
+            <View style={styles.clientCard}>
+              <View style={styles.clientAvatar}>
+                <Text style={{ fontSize: 24 }}>👤</Text>
+              </View>
+              <View style={styles.clientInfo}>
+                <Text style={styles.clientName}>{clientName}</Text>
+                <View style={styles.ratingRow}>
+                  <Ionicons name="star" size={14} color={THEME.warning} />
+                  <Text style={styles.ratingText}>{clientRating} · {clientServices} servicios</Text>
                 </View>
-                <View style={styles.clientInfo}>
-                  <Text style={styles.clientName}>{clientName}</Text>
-                  <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={14} color={THEME.warning} />
-                    <Text style={styles.ratingText}>{clientRating} · {clientServices} servicios</Text>
-                  </View>
-                </View>
+              </View>
                 <TouchableOpacity
                   style={styles.clientChatAction}
                   onPress={() => router.push({
@@ -644,7 +662,7 @@ export default function DetallePedidoDomiciliario() {
                       disabled={isLoading}
                     >
                       {isLoading ? (
-                        <ActivityIndicator color={THEME.dangerText} size="small" />
+                        <ActivityIndicator color="#fff" size="small" />
                       ) : (
                         <Text style={styles.textRechazar}>Rechazar</Text>
                       )}
@@ -774,10 +792,9 @@ export default function DetallePedidoDomiciliario() {
                       </View>
                     </View>
                   </Modal>
-                </>
+          </>
               )}
-            </>
-          )}
+          </>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -805,7 +822,7 @@ const styles = StyleSheet.create({
   dot: { width: 12, height: 12, borderRadius: 6, marginRight: 15 },
   addrLabel: { color: THEME.textSecondary, fontSize: 10, fontWeight: 'bold', marginBottom: 3 },
   addrValue: { color: '#fff', fontSize: 16 },
-  divider: { height: 1, backgroundColor: THEME.divider, marginVertical: 15, marginLeft: 27 },
+  divider: { height: 1, backgroundColor: '#2a3040', marginVertical: 15, marginLeft: 27 },
   statsRow: { flexDirection: 'row', gap: 15, marginBottom: 30 },
   tarifaBox: { flex: 1, backgroundColor: '#0e241c', padding: 15, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   tarifaValue: { color: THEME.primary, fontSize: 24, fontWeight: 'bold', marginTop: 5 },
@@ -821,7 +838,7 @@ const styles = StyleSheet.create({
   textAceptar: { color: '#0a0f1c', fontSize: 14, fontWeight: 'bold' },
   buttonDisabled: { opacity: 0.6 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.8)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: THEME.panel, borderRadius: 12, padding: 24, width: '85%', maxWidth: 400 },
+  modalContent: { backgroundColor: THEME.card, borderRadius: 12, padding: 24, width: '85%', maxWidth: 400 },
   modalTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold', marginBottom: 8 },
   modalSubtitle: { color: THEME.textSecondary, fontSize: 14, marginBottom: 16 },
   priceInput: {
@@ -836,7 +853,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalButtonsRow: { flexDirection: 'row', gap: 10 },
-  btnCancel: { flex: 1, backgroundColor: THEME.card, paddingVertical: 12, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: THEME.divider },
+  btnCancel: { flex: 1, backgroundColor: THEME.card, paddingVertical: 12, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#2a3040' },
   textCancel: { color: '#fff', fontSize: 14, fontWeight: '600' },
   btnSendOffer: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   textSendOffer: { color: '#0a0f1c', fontSize: 14, fontWeight: 'bold' },
@@ -852,7 +869,7 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   statusIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   statusIconAccepted: { backgroundColor: THEME.primary },
-  statusIconRejected: { backgroundColor: THEME.dangerText },
+  statusIconRejected: { backgroundColor: '#ff4444' },
   statusTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
   statusText: { color: THEME.textSecondary, fontSize: 13, lineHeight: 18 },
   statusActionBtn: { alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: '#fff' },

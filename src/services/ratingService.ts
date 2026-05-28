@@ -21,7 +21,13 @@ export interface Rating {
 export const ratingService = {
   async createRating(data: RatingRequest): Promise<Rating> {
     try {
-      const response = await api.post<Rating>('/api/calificaciones', data);
+      const payload = {
+        id_servicio: data.idServicio,
+        puntuacion: data.puntuacion,
+        comentario: data.comentario,
+        id_cliente: data.idCliente,
+      };
+      const response = await api.post<Rating>('/api/calificaciones', payload);
       return response.data;
     } catch (error: any) {
       throw error.response?.data || { error: 'Error al enviar calificación' };

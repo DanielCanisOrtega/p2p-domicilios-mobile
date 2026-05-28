@@ -198,6 +198,12 @@ export default function PedidosCliente() {
                     <Text style={styles.historyMeta}>Tarifa: ${order.tarifa?.toFixed(0) ?? '--'}</Text>
                     <Text style={styles.historyMeta}>{formatDate(order.fecha_creacion)}</Text>
                   </View>
+                  <TouchableOpacity
+                    style={styles.historyAction}
+                    onPress={() => handleTrackOrder(order.id)}
+                  >
+                    <Text style={styles.historyActionText}>Ver detalle</Text>
+                  </TouchableOpacity>
                 </View>
               ))
             )}
@@ -247,4 +253,6 @@ const styles = StyleSheet.create({
   historyRoute: { color: '#fff', fontSize: 14, fontWeight: '600', marginTop: 8 },
   historyMetaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
   historyMeta: { color: '#8d95a4', fontSize: 12 },
+  historyAction: { marginTop: 12, alignSelf: 'flex-start', backgroundColor: '#17d5aa', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
+  historyActionText: { color: '#0a0f1c', fontWeight: '700', fontSize: 12 },
 });
