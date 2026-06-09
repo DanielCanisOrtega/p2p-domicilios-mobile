@@ -23,7 +23,7 @@ const getConfiguredBackendUrl = (): string | undefined => {
 const getBaseURL = (): string => {
   const configured = getConfiguredBackendUrl();
   if (configured) {
-    return configured;
+    return LOCAL_BACKEND_URL;
   }
 
   return LOCAL_BACKEND_URL;

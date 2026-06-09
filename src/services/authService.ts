@@ -16,7 +16,7 @@ interface AuthResponse {
   token: string;
   username: string;
   email: string;
-  role: 'CLIENT' | 'DOMICILIARIO';
+  role: 'CLIENT' | 'DOMICILIARIO' | 'ADMIN';
   userId?: number;
   [key: string]: any;
 }

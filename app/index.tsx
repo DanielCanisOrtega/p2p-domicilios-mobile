@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useContext, useEffect } from 'react';
 import { AuthContext } from '../src/context/AuthContext';
@@ -15,9 +15,11 @@ export default function WelcomeScreen() {
         router.replace('/(cliente)/mapa');
       } else if (user.role === 'DOMICILIARIO') {
         router.replace('/(domiciliario)/mapa');
+      } else if (user.role === 'ADMIN') {
+        router.replace('/(admin)/usuarios' as never);
       }
     }
-  }, [isAuthenticated, user, isLoading]);
+  }, [isAuthenticated, user, isLoading, router]);
 
   if (isLoading) {
     return (
