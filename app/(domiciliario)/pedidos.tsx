@@ -469,6 +469,23 @@ export default function DetallePedidoDomiciliario() {
           <TouchableOpacity style={compStyles.historyBtn} onPress={() => router.replace('/(domiciliario)/pedidos')}>
             <Text style={compStyles.historyBtnText}>Ver historial de entregas</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={compStyles.reportBtn}
+            onPress={() => {
+              if (!orderId) {
+                Alert.alert('Error', 'ID de servicio no disponible');
+                return;
+              }
+              router.push({
+                pathname: '/reportar-incidencia',
+                params: { idServicio: String(orderId) },
+              });
+            }}
+          >
+            <Ionicons name="warning-outline" size={18} color="#f4b400" />
+            <Text style={compStyles.reportBtnText}>Reportar incidencia</Text>
+          </TouchableOpacity>
         </ScrollView>
 
         <RatingModal
@@ -794,6 +811,23 @@ export default function DetallePedidoDomiciliario() {
                   </Modal>
           </>
               )}
+
+              <TouchableOpacity
+                style={styles.reportBtn}
+                onPress={() => {
+                  if (!orderId) {
+                    Alert.alert('Error', 'ID de servicio no disponible');
+                    return;
+                  }
+                  router.push({
+                    pathname: '/reportar-incidencia',
+                    params: { idServicio: String(orderId) },
+                  });
+                }}
+              >
+                <Ionicons name="warning-outline" size={20} color="#f4b400" />
+                <Text style={styles.reportBtnText}>Reportar incidencia</Text>
+              </TouchableOpacity>
           </>
         </View>
       </ScrollView>
@@ -837,6 +871,12 @@ const styles = StyleSheet.create({
   btnAceptar: { flex: 1, backgroundColor: THEME.primary, paddingVertical: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: THEME.primary },
   textAceptar: { color: '#0a0f1c', fontSize: 14, fontWeight: 'bold' },
   buttonDisabled: { opacity: 0.6 },
+  reportBtn: {
+    marginTop: 16, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(244, 180, 0, 0.35)',
+    paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: 'rgba(244, 180, 0, 0.08)',
+  },
+  reportBtnText: { color: '#f4b400', fontSize: 14, fontWeight: '700' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.8)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: THEME.card, borderRadius: 12, padding: 24, width: '85%', maxWidth: 400 },
   modalTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold', marginBottom: 8 },
@@ -927,5 +967,11 @@ const compStyles = StyleSheet.create({
   mainButton: { width: '100%', backgroundColor: COMP_COLORS.primary, borderRadius: 12, paddingVertical: 18, alignItems: 'center', marginBottom: 20 },
   mainButtonText: { color: '#000', fontSize: 18, fontWeight: 'bold' },
   historyBtn: { paddingBottom: 20 },
-  historyBtnText: { color: COMP_COLORS.textSecondary, fontSize: 14, textDecorationLine: 'underline' }
+  historyBtnText: { color: COMP_COLORS.textSecondary, fontSize: 14, textDecorationLine: 'underline' },
+  reportBtn: {
+    width: '100%', marginTop: 16, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(244, 180, 0, 0.35)',
+    paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: 'rgba(244, 180, 0, 0.08)',
+  },
+  reportBtnText: { color: '#f4b400', fontSize: 14, fontWeight: '700' },
 });

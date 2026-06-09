@@ -622,9 +622,21 @@ export default function SeguimientoScreen() {
             <Text style={styles.actionText}>Llamar</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn}>
-            <Ionicons name="help-circle-outline" size={20} color="#e8e8e8" />
-            <Text style={styles.actionText}>Ayuda</Text>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => {
+              if (!idServicio) {
+                Alert.alert('Error', 'ID de servicio no disponible');
+                return;
+              }
+              router.push({
+                pathname: '/reportar-incidencia',
+                params: { idServicio },
+              });
+            }}
+          >
+            <Ionicons name="warning-outline" size={20} color="#f4b400" />
+            <Text style={styles.actionText}>Reportar</Text>
           </TouchableOpacity>
         </View>
 

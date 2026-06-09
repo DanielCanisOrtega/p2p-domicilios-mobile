@@ -47,10 +47,23 @@ export default function AdminLayout() {
         }}
       />
       <Tabs.Screen
+        name="incidencias"
+        options={{
+          title: 'INCIDENCIAS',
+          tabBarIcon: ({ color, size }) => <Ionicons name="warning" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="perfil"
         options={{
           title: 'PERFIL',
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="incidencia-detalle"
+        options={{
+          href: null,
         }}
       />
     </Tabs>
