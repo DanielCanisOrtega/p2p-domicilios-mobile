@@ -3,6 +3,7 @@ import { useContext } from 'react';
 import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { THEME } from '../../src/constants/theme';
 import { AuthContext } from '../../src/context/AuthContext';
+import PendingRatingBanner from '../../src/components/rating/PendingRatingBanner';
 
 export default function DomiciliarioPerfilScreen() {
   const { user, logout } = useContext(AuthContext);
@@ -50,6 +51,15 @@ export default function DomiciliarioPerfilScreen() {
         <Text style={styles.email}>{user?.email}</Text>
         <Text style={styles.role}>Domiciliario</Text>
       </View>
+
+      <PendingRatingBanner
+        onNavigate={(servicio) =>
+          router.push({
+            pathname: '/(domiciliario)/pedidos',
+            params: { orderId: String(servicio.idServicio) },
+          })
+        }
+      />
 
       <View style={styles.statsRow}>
         <View style={styles.miniStat}>

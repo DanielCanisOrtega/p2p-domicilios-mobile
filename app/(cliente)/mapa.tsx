@@ -1,5 +1,6 @@
 import { useState, useEffect, useContext, useCallback, useMemo, useRef } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -8,12 +9,14 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { MapView, Marker } from '../../src/components/map';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { AuthContext } from '../../src/context/AuthContext';
 import { driverService, NearbyDriver } from '../../src/services/driverService';
+import { ratingService } from '../../src/services/ratingService';
 import { THEME } from '../../src/constants/theme';
 import DriverCard from '../../src/components/driver/DriverCard';
 import Avatar from '../../src/components/ui/Avatar';
@@ -57,6 +60,30 @@ export default function ClienteMapScreen() {
   const locationRef = useRef<Location.LocationObject | null>(null);
   const isFetchingDriversRef = useRef(false);
   const hasFetchedDriversRef = useRef(false);
+  const hasShownRatingReminder = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (hasShownRatingReminder.current) return;
+      const check = async () => {
+        try {
+          const pendientes = await ratingService.getPendientes();
+          if (pendientes.length > 0) {
+            hasShownRatingReminder.current = true;
+            Alert.alert(
+              'Calificación pendiente',
+              pendientes.length === 1
+                ? 'Tienes 1 servicio pendiente de calificar. Ve a tu perfil para hacerlo.'
+                : `Tienes ${pendientes.length} servicios pendientes de calificar. Ve a tu perfil para hacerlo.`
+            );
+          }
+        } catch {
+          // Silently fail
+        }
+      };
+      void check();
+    }, [])
+  );
 
   const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 6371;

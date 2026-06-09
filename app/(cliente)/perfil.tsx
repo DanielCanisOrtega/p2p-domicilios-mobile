@@ -3,6 +3,7 @@ import { useContext } from 'react';
 import { useRouter } from 'expo-router';
 import { AuthContext } from '../../src/context/AuthContext';
 import { THEME } from '../../src/constants/theme';
+import PendingRatingBanner from '../../src/components/rating/PendingRatingBanner';
 
 export default function ClientePerfilScreen() {
   const { user, logout } = useContext(AuthContext);
@@ -51,6 +52,15 @@ export default function ClientePerfilScreen() {
         <Text style={styles.email}>{user?.email}</Text>
         <Text style={styles.role}>Cliente</Text>
       </View>
+
+      <PendingRatingBanner
+        onNavigate={(servicio) =>
+          router.push({
+            pathname: '/(cliente)/seguimiento',
+            params: { idServicio: String(servicio.idServicio) },
+          })
+        }
+      />
 
       <View style={styles.section}>
         <TouchableOpacity style={styles.menuItem}>

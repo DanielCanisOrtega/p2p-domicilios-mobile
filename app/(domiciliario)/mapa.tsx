@@ -16,6 +16,7 @@ import { THEME } from '../../src/constants/theme';
 import { AuthContext } from '../../src/context/AuthContext';
 import { driverService, type DriverActiveOrder } from '../../src/services/driverService';
 import { normalizeOrder, orderService, type Order } from '../../src/services/orderService';
+import { ratingService } from '../../src/services/ratingService';
 import { pendingOrderStore } from '../../src/services/pendingOrderStore';
 
 const CUSTOM_MAP_STYLE = [
@@ -46,6 +47,7 @@ export default function DomiciliarioMapScreen() {
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const latestActiveServiceIdRef = useRef<number | null>(null);
+  const hasShownRatingReminder = useRef(false);
 
   const latestPendingOrder = [...pendingOrders].sort((left, right) => {
     const leftTime = left.fecha_creacion ? new Date(left.fecha_creacion).getTime() : 0;
@@ -189,6 +191,29 @@ export default function DomiciliarioMapScreen() {
     useCallback(() => {
       void loadActiveOrders();
     }, [loadActiveOrders])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (hasShownRatingReminder.current) return;
+      const check = async () => {
+        try {
+          const pendientes = await ratingService.getPendientes();
+          if (pendientes.length > 0) {
+            hasShownRatingReminder.current = true;
+            Alert.alert(
+              'Calificación pendiente',
+              pendientes.length === 1
+                ? 'Tienes 1 servicio pendiente de calificar. Ve a tu perfil para hacerlo.'
+                : `Tienes ${pendientes.length} servicios pendientes de calificar. Ve a tu perfil para hacerlo.`
+            );
+          }
+        } catch {
+          // Silently fail
+        }
+      };
+      void check();
+    }, [])
   );
 
   useEffect(() => {
