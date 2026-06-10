@@ -2,9 +2,8 @@ import type { ExpoConfig } from "expo/config";
 
 const DEFAULT_LOCAL = "http://localhost:8080";
 
-// Local-only testing: force localhost and keep production backend commented out.
-// const DEFAULT_PROD = "https://p2p-domicilios-backend-1.onrender.com";
-const BACKEND_URL = DEFAULT_LOCAL;
+// Fixed production backend for quick remote testing
+const BACKEND_URL = "https://p2p-domicilios-backend-1.onrender.com";
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY?.trim();
 
 const config: ExpoConfig = {

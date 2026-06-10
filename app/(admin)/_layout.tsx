@@ -1,6 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
 import { useContext } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../src/context/AuthContext';
 
 export default function AdminLayout() {
@@ -51,6 +51,13 @@ export default function AdminLayout() {
         options={{
           title: 'INCIDENCIAS',
           tabBarIcon: ({ color, size }) => <Ionicons name="warning" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="historial"
+        options={{
+          title: 'HISTORIAL',
+          tabBarIcon: ({ color, size }) => <Ionicons name="time" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
