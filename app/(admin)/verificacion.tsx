@@ -80,7 +80,7 @@ export default function DriverVerificationScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadDrivers(true)} />}
       >
         <Text style={styles.title}>Verificacion de domiciliarios</Text>
-        <Text style={styles.subtitle}>RF15: validar metadata y aprobar o rechazar</Text>
+        <Text style={styles.subtitle}>Validar metadata y aprobar o rechazar</Text>
 
         {error && <Text style={styles.errorText}>{error}</Text>}
 

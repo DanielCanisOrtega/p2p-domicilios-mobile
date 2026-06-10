@@ -95,7 +95,7 @@ export default function AdminUsersScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadUsers(true)} />}
       >
         <Text style={styles.title}>Gestion de usuarios</Text>
-        <Text style={styles.subtitle}>RF13 y RF14: listado, filtros y estado de cuenta</Text>
+        <Text style={styles.subtitle}>Listado, filtros y estado de cuenta</Text>
 
         <View style={styles.filterCard}>
           <TextInput
