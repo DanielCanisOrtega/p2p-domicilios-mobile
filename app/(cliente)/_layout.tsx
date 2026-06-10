@@ -75,6 +75,12 @@ export default function ClienteLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="reportar-incidencia"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

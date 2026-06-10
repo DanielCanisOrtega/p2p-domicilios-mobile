@@ -478,7 +478,7 @@ export default function DetallePedidoDomiciliario() {
                 return;
               }
               router.push({
-                pathname: '/reportar-incidencia',
+                pathname: '/(domiciliario)/reportar-incidencia',
                 params: { idServicio: String(orderId) },
               });
             }}
@@ -820,7 +820,7 @@ export default function DetallePedidoDomiciliario() {
                     return;
                   }
                   router.push({
-                    pathname: '/reportar-incidencia',
+                    pathname: '/(domiciliario)/reportar-incidencia',
                     params: { idServicio: String(orderId) },
                   });
                 }}

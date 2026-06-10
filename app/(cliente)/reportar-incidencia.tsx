@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
-import { incidentService } from '../src/services/incidentService';
+import { incidentService } from '../../src/services/incidentService';
 
 export default function ReportarIncidenciaScreen() {
   const router = useRouter();

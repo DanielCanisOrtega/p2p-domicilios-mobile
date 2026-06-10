@@ -57,6 +57,12 @@ export default function DomiciliarioLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="reportar-incidencia"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

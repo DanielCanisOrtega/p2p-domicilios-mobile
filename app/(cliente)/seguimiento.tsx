@@ -630,7 +630,7 @@ export default function SeguimientoScreen() {
                 return;
               }
               router.push({
-                pathname: '/reportar-incidencia',
+                pathname: '/(cliente)/reportar-incidencia',
                 params: { idServicio },
               });
             }}
