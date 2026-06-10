@@ -36,10 +36,28 @@ export interface Order {
     telefono?: string;
     calificacion?: number;
   };
+  domiciliario?: {
+    id?: number;
+    nombre?: string;
+    username?: string;
+  };
+  nombre_cliente?: string;
+  clienteNombre?: string;
+  cliente_nombre?: string;
+  clientName?: string;
+  customerName?: string;
+  nombre_domiciliario?: string;
+  domiciliarioNombre?: string;
+  domiciliario_nombre?: string;
+  driverName?: string;
+  repartidorNombre?: string;
+  origen?: string;
+  destino?: string;
 }
 
 export const normalizeOrder = (raw: any): Order => {
   const clienteRaw = raw?.cliente || raw?.customer || raw?.usuario || raw?.client || {};
+  const domiciliarioRaw = raw?.domiciliario || raw?.driver || raw?.courier || raw?.repartidor || raw?.deliveryman || {};
 
   const normalizedId =
     raw?.id ??
@@ -72,11 +90,42 @@ export const normalizeOrder = (raw: any): Order => {
     lon_destino: Number(raw?.lon_destino ?? raw?.lonDestino ?? raw?.destinationLon ?? raw?.longitud_destino ?? 0) || undefined,
     cliente: {
       id: Number(clienteRaw?.id ?? clienteRaw?.clienteId ?? clienteRaw?.id_cliente ?? raw?.id_cliente ?? 0) || undefined,
-      nombre: clienteRaw?.nombre ?? clienteRaw?.name ?? clienteRaw?.username ?? raw?.nombre_cliente ?? raw?.clienteNombre,
+      nombre:
+        clienteRaw?.nombre ??
+        clienteRaw?.name ??
+        clienteRaw?.username ??
+        raw?.nombre_cliente ??
+        raw?.clienteNombre ??
+        raw?.cliente_nombre ??
+        raw?.clientName ??
+        raw?.customerName,
       email: clienteRaw?.email,
       telefono: clienteRaw?.telefono ?? clienteRaw?.phone,
       calificacion: Number(clienteRaw?.calificacion ?? clienteRaw?.rating ?? raw?.calificacion_cliente ?? 0) || undefined,
     },
+    nombre_cliente: raw?.nombre_cliente ?? raw?.clienteNombre ?? raw?.cliente_nombre ?? raw?.clientName ?? raw?.customerName,
+    clienteNombre: raw?.clienteNombre,
+    cliente_nombre: raw?.cliente_nombre,
+    clientName: raw?.clientName,
+    customerName: raw?.customerName,
+    domiciliario: {
+      id: Number(domiciliarioRaw?.id ?? domiciliarioRaw?.domiciliarioId ?? domiciliarioRaw?.driverId ?? raw?.id_domiciliario ?? 0) || undefined,
+      nombre:
+        domiciliarioRaw?.nombre ??
+        domiciliarioRaw?.name ??
+        domiciliarioRaw?.username ??
+        raw?.nombre_domiciliario ??
+        raw?.domiciliarioNombre ??
+        raw?.domiciliario_nombre ??
+        raw?.driverName ??
+        raw?.repartidorNombre,
+      username: domiciliarioRaw?.username ?? raw?.domiciliarioUsername ?? raw?.driverUsername,
+    },
+    nombre_domiciliario: raw?.nombre_domiciliario ?? raw?.domiciliarioNombre ?? raw?.domiciliario_nombre ?? raw?.driverName ?? raw?.repartidorNombre,
+    domiciliarioNombre: raw?.domiciliarioNombre,
+    domiciliario_nombre: raw?.domiciliario_nombre,
+    driverName: raw?.driverName,
+    repartidorNombre: raw?.repartidorNombre,
   };
 };
 
@@ -196,6 +245,30 @@ export const orderService = {
       throw {
         status: error.response?.status,
         error: error.response?.data || { error: "Error al actualizar el estado" },
+      };
+    }
+  },
+  async getAdminOrders(): Promise<Order[]> {
+    try {
+      const response = await api.get<Order[]>("/admin/orders");
+      const payload = Array.isArray(response.data) ? response.data : [];
+      return payload.map(normalizeOrder).filter((order) => order.id > 0);
+    } catch (error: any) {
+      throw {
+        status: error.response?.status,
+        error: error.response?.data || { error: "Error al obtener historial de servicios" },
+      };
+    }
+  },
+
+  async getAdminOrderById(orderId: number): Promise<Order> {
+    try {
+      const response = await api.get<any>(`/admin/orders/${orderId}`);
+      return normalizeOrder(response.data);
+    } catch (error: any) {
+      throw {
+        status: error.response?.status,
+        error: error.response?.data || { error: "Error al obtener detalle del servicio" },
       };
     }
   },

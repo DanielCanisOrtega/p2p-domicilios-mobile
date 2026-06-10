@@ -39,6 +39,14 @@ export interface UserFilters {
   q?: string;
 }
 
+const normalizeDriver = (d: any): DriverVerification => ({
+  ...d,
+  userId: d.userId ?? d.user_id,
+  domiciliarioId: d.domiciliarioId ?? d.domiciliario_id,
+  numeroDocumento: d.numeroDocumento ?? d.numero_documento,
+  estadoUsuario: d.estadoUsuario ?? d.estado_usuario,
+});
+
 const normalizeErrorMessage = (error: any, fallback: string) => {
   const data = error?.response?.data;
   if (typeof data === 'string' && data.trim()) {
@@ -96,7 +104,8 @@ export const adminService = {
       const response = await api.get<DriverVerification[]>('/admin/drivers/pending', {
         params: { verificado },
       });
-      return Array.isArray(response.data) ? response.data : [];
+      const list = Array.isArray(response.data) ? response.data : [];
+      return list.map(normalizeDriver);
     } catch (error: any) {
       throw {
         status: error?.response?.status,
@@ -108,7 +117,7 @@ export const adminService = {
   async getDriverDocuments(userId: number): Promise<DriverVerification> {
     try {
       const response = await api.get<DriverVerification>(`/admin/drivers/${userId}/documents`);
-      return response.data;
+      return normalizeDriver(response.data);
     } catch (error: any) {
       throw {
         status: error?.response?.status,
