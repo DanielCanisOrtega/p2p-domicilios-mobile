@@ -6,6 +6,7 @@ import { MapView, Marker } from '../../src/components/map';
 import RatingModal from '../../src/components/rating/RatingModal';
 import { THEME } from '../../src/constants/theme';
 import { driverService, type DriverDetail } from '../../src/services/driverService';
+import { incidentStore } from '../../src/services/incidentStore';
 import { orderService } from '../../src/services/orderService';
 import { websocketService, type TrackingUpdate } from '../../src/services/websocketService';
 
@@ -629,6 +630,7 @@ export default function SeguimientoScreen() {
                 Alert.alert('Error', 'ID de servicio no disponible');
                 return;
               }
+              incidentStore.setServicioId(idServicio);
               router.push({
                 pathname: '/(cliente)/reportar-incidencia',
                 params: { idServicio },

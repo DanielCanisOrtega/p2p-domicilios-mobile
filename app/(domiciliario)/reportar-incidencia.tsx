@@ -3,10 +3,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { incidentService } from '../../src/services/incidentService';
+import { incidentStore } from '../../src/services/incidentStore';
 
 export default function ReportarIncidenciaScreen() {
   const router = useRouter();
-  const { idServicio } = useLocalSearchParams<{ idServicio: string }>();
+  const raw = useLocalSearchParams<{ idServicio: string }>();
+  const idServicio = raw.idServicio || incidentStore.getServicioId();
   const [descripcion, setDescripcion] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 

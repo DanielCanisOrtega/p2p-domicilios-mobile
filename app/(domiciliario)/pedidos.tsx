@@ -5,6 +5,7 @@ import { ActivityIndicator, Alert, Modal, Platform, SafeAreaView, ScrollView, St
 import { MapView, Marker } from '../../src/components/map';
 import RatingModal from '../../src/components/rating/RatingModal';
 import { THEME } from '../../src/constants/theme';
+import { incidentStore } from '../../src/services/incidentStore';
 import { orderService } from '../../src/services/orderService';
 import { pendingOrderStore } from '../../src/services/pendingOrderStore';
 import { ratingService } from '../../src/services/ratingService';
@@ -477,6 +478,7 @@ export default function DetallePedidoDomiciliario() {
                 Alert.alert('Error', 'ID de servicio no disponible');
                 return;
               }
+              incidentStore.setServicioId(String(orderId));
               router.push({
                 pathname: '/(domiciliario)/reportar-incidencia',
                 params: { idServicio: String(orderId) },
@@ -819,6 +821,7 @@ export default function DetallePedidoDomiciliario() {
                     Alert.alert('Error', 'ID de servicio no disponible');
                     return;
                   }
+                  incidentStore.setServicioId(String(orderId));
                   router.push({
                     pathname: '/(domiciliario)/reportar-incidencia',
                     params: { idServicio: String(orderId) },
